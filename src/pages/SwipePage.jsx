@@ -1,3 +1,10 @@
+import CategorySelector from "../components/CategorySelector";
+
 export default function SwipePage() {
-  return  <div className="text-xl font-bold">Select a main category (1-5 categories) </div>;
+  return (
+    <div className="p-4">
+      <CategorySelector maxSelect={5} />
+    </div>
+
+  );
 }
