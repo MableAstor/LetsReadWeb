@@ -102,7 +102,6 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
           Find a Book
         </button>
       </div>
-
     </div>
   );
 }
