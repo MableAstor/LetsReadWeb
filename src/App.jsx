@@ -6,7 +6,9 @@ import SwipePage from "./pages/SwipePage";
 import LibraryPage from "./pages/LibraryPage";
 import ProfilePage from "./pages/ProfilePage";
 import Swipeforbooks from "./pages/Swipeforbooks";
-
+import ResultPage from"./pages/ResultPage"; 
+import LoginPage from"./pages/LoginPage";
+import SigninPage from"./pages/SigninPage";
 export default function App() {
   return (
     <div className="min-h-screen bg-[#FCD8CD] p-4 flex flex-col items-center">
@@ -19,6 +21,8 @@ export default function App() {
           <Route path="/swipeforbooks" element={<Swipeforbooks />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/Result" element={<ResultPage />} />
+          <Route path="/Login"element={<LoginPage/>}/>
         </Routes>
       </main>
     </div>
