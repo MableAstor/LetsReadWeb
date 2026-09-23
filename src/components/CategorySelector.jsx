@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function CategoryCard({ onSearch, maxSelect = 5 }) {
-  
+  const navigate = useNavigate();
+
   const [mainCategories, setMainCategories] = useState(['Fantasy', 'Yaoi']);
   const [subCategories, setSubCategories] = useState(['Historical', 'Dark/Tragedy']);
 
- 
   const mainList = [
     'Romance', 'Fantasy', 'Adventure', 'Mystery', 'Thiller',
     'Horror', 'Scifi', 'Historical', 'Yaoi', 'Yuri'
@@ -15,7 +16,6 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
     'Historical', 'School/Campus', 'Dark/Tragedy', 'Action/Adventure', 'Sci-Fi/Funturistic'
   ];
 
-  
   const toggleCategory = (tag, selectedList, setSelectedList) => {
     if (selectedList.includes(tag)) {
       setSelectedList(selectedList.filter((item) => item !== tag));
@@ -31,16 +31,14 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
   const handleFindBook = () => {
     if (onSearch) {
       onSearch({ main: mainCategories, sub: subCategories });
-    } else {
-      console.log('Main:', mainCategories, 'Sub:', subCategories);
     }
+   
+    navigate('/swipeforbooks');
   };
 
   return (
-
     <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl p-7 shadow-sm">
-      
-
+      {/* หมวดหมู่แถวที่ 1 */}
       <div className="space-y-2.5 mb-5">
         <h2 className="text-xs font-bold text-black">
           เลือกหมวดหลัก ( 1 - 5 หมวด )
@@ -66,7 +64,7 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
         </div>
       </div>
 
-
+      {/* หมวดหมู่แถวที่ 2 */}
       <div className="space-y-2.5 mb-6">
         <h2 className="text-xs font-bold text-black">
           เลือกหมวดหลัก ( 1 - 5 หมวด )
@@ -92,7 +90,7 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
         </div>
       </div>
 
-    
+      {/* ปุ่ม Find a Book */}
       <div className="flex justify-center">
         <button
           type="button"

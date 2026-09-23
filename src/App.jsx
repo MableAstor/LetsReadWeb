@@ -5,16 +5,18 @@ import FeedPage from "./pages/FeedPage";
 import SwipePage from "./pages/SwipePage";
 import LibraryPage from "./pages/LibraryPage";
 import ProfilePage from "./pages/ProfilePage";
+import Swipeforbooks from "./pages/Swipeforbooks";
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-[#FCD8CD] p-4 flex flex-col items-center">
       <Headbar />
-      <main className="max-w-6xl mx-auto mt-6 bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+      <main className="w-full max-w-6xl mt-6 flex justify-center">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/swipe" element={<SwipePage />} />
+          <Route path="/swipeforbooks" element={<Swipeforbooks />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Routes>
