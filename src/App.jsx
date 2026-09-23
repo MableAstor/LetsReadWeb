@@ -9,6 +9,7 @@ import Swipeforbooks from "./pages/Swipeforbooks";
 import ResultPage from"./pages/ResultPage"; 
 import LoginPage from"./pages/LoginPage";
 import SigninPage from"./pages/SigninPage";
+import LeaderboardPage from "./pages/Leaderboard";
 export default function App() {
   return (
     <div className="min-h-screen bg-[#FCD8CD] p-4 flex flex-col items-center">
@@ -17,6 +18,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/feed" element={<FeedPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/swipe" element={<SwipePage />} />
           <Route path="/swipeforbooks" element={<Swipeforbooks />} />
           <Route path="/library" element={<LibraryPage />} />

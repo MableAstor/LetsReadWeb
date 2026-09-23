@@ -7,6 +7,7 @@ export const Headbar = () => {
   const navItems = [
     { name: "Home", path: "/" },
     { name: "Feed", path: "/feed" },
+    { name: "Leaderboard", path: "/leaderboard" },
     { name: "Swipe", path: "/swipe" },
     { name: "Library", path: "/library" },
   ];
