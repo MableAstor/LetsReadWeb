@@ -6,7 +6,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // ฟังก์ชันเวลากดปุ่มกากบาท ให้ย้อนกลับไปหน้าที่แล้ว
+  // ฟังก์ชันย้อนกลับไปหน้าที่แล้ว
   const handleClose = () => {
     navigate(-1);
   };
@@ -17,7 +17,7 @@ export default function LoginPage() {
   };
 
   return (
-    // 1. พื้นหลังเต็มจอ ไล่เฉดสีพาสเทลตามภาพ
+    // 1. พื้นหลังเต็มจอ ไล่เฉดสีพาสเทล
     <div className="min-h-screen w-full bg-gradient-to-tr from-[#dce7f8] via-[#f7e4e5] to-[#fdedcd] flex items-center justify-center p-4 relative font-sans">
       
       {/* ข้อความบอกชื่อมุมซ้ายบน */}
@@ -99,16 +99,19 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* ลิงก์ Create Account และ Forgot password? */}
+            {/* ลิงก์ Create Account และ Forgot password? (แก้ไขส่วนซ้อนทับแล้ว) */}
             <div className="flex items-center justify-between text-xs pt-0.5">
               <button
                 type="button"
+                onClick={() => navigate('/signin')}
                 className="font-bold text-black hover:underline cursor-pointer"
               >
                 Create Account
               </button>
+
               <button
                 type="button"
+                onClick={() => navigate('/forgotpassword')}
                 className="font-bold text-black underline hover:text-blue-600 cursor-pointer"
               >
                 Forgot password?

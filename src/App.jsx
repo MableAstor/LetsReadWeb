@@ -10,6 +10,7 @@ import ResultPage from"./pages/ResultPage";
 import LoginPage from"./pages/LoginPage";
 import SigninPage from"./pages/SigninPage";
 import LeaderboardPage from "./pages/Leaderboard";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 export default function App() {
   return (
     <div className="min-h-screen bg-[#FCD8CD] p-4 flex flex-col items-center">
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/Result" element={<ResultPage />} />
           <Route path="/Login"element={<LoginPage/>}/>
+          <Route path ="/forgotpass"element={<ForgotPasswordPage/>}/>
         </Routes>
       </main>
     </div>
