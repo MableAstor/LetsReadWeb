@@ -13,7 +13,7 @@ import LeaderboardPage from "./pages/Leaderboard";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#FCD8CD] p-4 flex flex-col items-center">
+    <div className="min-h-screen bg-[#FCD8CD] flex flex-col items-center">
       <Headbar />
       <main className="w-full max-w-6xl mt-6 flex justify-center">
         <Routes>
