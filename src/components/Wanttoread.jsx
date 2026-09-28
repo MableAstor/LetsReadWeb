@@ -7,11 +7,11 @@ import { useState } from "react";
 export default function WanttoRead() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 w-55">
+    <div className="bg-white rounded-lg shadow-md p-4 w-50">
       <img
         src={khemjira}
         alt="Book Cover"
-        className="w-full h-70 object-cover rounded-md mb-4"
+        className="w-full h-55 object-cover rounded-md mb-2"
       />
       <h3 className="text-lg font-bold">Khemjira</h3>
       <p className="text-gray-600 text-sm mb-2">Author : คาลิ</p>
