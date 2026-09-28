@@ -5,19 +5,21 @@ export default function ResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 1. ดึงหนังสือที่ผู้ใช้กดถูกใจจริง ๆ มาจากหน้า Swipeforbooks
+  // 1. ดึงหนังสือที่ผู้ใช้กดถูกใจจริง ๆ จากหน้า Swipeforbooks
   const likedBooks = location.state?.likedBooks || [];
 
-  // แยก 3 เล่มแรกไปแสดงในส่วน TOP 3
-  const topThreeLiked = likedBooks.slice(0, 3);
-  
-  // ดึงเล่มที่ 4 (ถ้ามี) มาแสดงในช่องหมวดนอกสายตา
-  const otherLikedBook = likedBooks[3] || null;
+  // หนังสือแนะนำสำหรับ "หมวดนอกสายตาที่คุณสนใจ" (ตามรูปดีไซน์ The Song of Achilles)
+  const surpriseBook = likedBooks[3] || {
+    id: 99,
+    title: 'The Song of Achilles',
+    category: 'Historical • Romance',
+    image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=600'
+  };
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col items-center pb-16 px-4 font-sans">
       
-      {/* 1. กล่องสีขาวแถบหัวข้อด้านบน (ตามรูป PC SwipeSummary) */}
+      {/* 1. กล่องสีขาวแถบหัวข้อด้านบน */}
       <div className="w-full max-w-xl bg-white rounded-2xl py-3 px-6 shadow-sm flex items-center justify-center gap-2 mt-2">
         <span className="text-yellow-500 text-sm">✨</span>
         <h1 className="text-sm sm:text-base font-bold text-gray-900 tracking-wide">
@@ -43,7 +45,7 @@ export default function ResultPage() {
           </button>
         </div>
       ) : (
-        /* เมื่อมีหนังสือที่กดถูกใจ จะแสดงโครงสร้างการ์ดตามดีไซน์ */
+        /* เมื่อมีหนังสือที่กดถูกใจ จะแสดงผลทั้ง TOP 3 และ หมวดนอกสายตา */
         <div className="w-full mt-8 flex flex-col">
           
           {/* --- 2. ส่วนแสดง TOP 3 เล่ม --- */}
@@ -54,7 +56,7 @@ export default function ResultPage() {
 
             {/* ตารางแสดงการ์ด 3 คอลัมน์ */}
             <div className="grid grid-cols-3 gap-3 sm:gap-4">
-              {topThreeLiked.map((book) => (
+              {likedBooks.slice(0, 3).map((book) => (
                 <div
                   key={book.id}
                   className="bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-md transition duration-200"
@@ -82,34 +84,32 @@ export default function ResultPage() {
             </div>
           </div>
 
-          {/* --- 3. ส่วนหมวดนอกสายตาที่คุณสนใจ (แสดงเมื่อผู้ใช้กดถูกใจตั้งแต่ 4 เล่มขึ้นไป) --- */}
-          {otherLikedBook && (
-            <div className="mt-8">
-              <h2 className="text-xs font-bold text-gray-900 mb-3 tracking-wide">
-                หมวดนอกสายตาที่คุณสนใจ
-              </h2>
-              
-              <div className="w-1/3 pr-2">
-                <div className="bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-md transition duration-200">
-                  <div className="w-full h-44 sm:h-56 overflow-hidden bg-gray-100">
-                    <img
-                      src={otherLikedBook.image}
-                      alt={otherLikedBook.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-3">
-                    <h3 className="text-xs font-bold text-gray-900 truncate">
-                      {otherLikedBook.title}
-                    </h3>
-                    <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                      {otherLikedBook.category}
-                    </p>
-                  </div>
+          {/* --- 3. ส่วนหมวดนอกสายตาที่คุณสนใจ (แสดงด้านล่างเสมอตามรูป) --- */}
+          <div className="mt-8">
+            <h2 className="text-xs font-bold text-gray-900 mb-3 tracking-wide">
+              หมวดนอกสายตาที่คุณสนใจ
+            </h2>
+            
+            <div className="w-1/3 pr-2">
+              <div className="bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-md transition duration-200">
+                <div className="w-full h-44 sm:h-56 overflow-hidden bg-gray-100">
+                  <img
+                    src={surpriseBook.image}
+                    alt={surpriseBook.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="p-3">
+                  <h3 className="text-xs font-bold text-gray-900 truncate">
+                    {surpriseBook.title}
+                  </h3>
+                  <p className="text-[10px] text-gray-500 mt-0.5 truncate">
+                    {surpriseBook.category}
+                  </p>
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
           {/* ปุ่มสำหรับกลับไปสไวป์ใหม่อีกครั้ง */}
           <div className="flex justify-center mt-10">
