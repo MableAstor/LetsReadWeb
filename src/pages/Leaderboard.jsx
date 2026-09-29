@@ -15,26 +15,11 @@ export default function LeaderboardPage() {
   ];
 
   return (
-    <div className="w-full max-w-xl mx-auto flex flex-col items-center pb-20 px-4 font-sans text-gray-800">
+    // pb-28 เว้นช่องว่างด้านล่างเผื่อไว้ให้ Floating Bar ไม่ทับเนื้อหา
+    <div className="w-full max-w-xl mx-auto flex flex-col items-center pb-28 px-4 font-sans text-gray-800 relative">
       
-      {/* 1. แท็บเลือกระหว่าง Review Feed กับ Trophy & Leaderboard */}
+      {/* 1. แท็บเลือกช่วงเวลา (Monthly vs Yearly) */}
       <div className="w-full grid grid-cols-2 gap-2 mt-4">
-        <button
-          type="button"
-          className="py-2.5 bg-white text-xs font-bold rounded-xl shadow-sm text-gray-500 hover:text-black transition cursor-pointer text-center"
-        >
-          Review Feed
-        </button>
-        <button
-          type="button"
-          className="py-2.5 bg-white text-xs font-bold rounded-xl shadow-sm text-black border border-gray-200 text-center"
-        >
-          Trophy & Leaderboard
-        </button>
-      </div>
-
-      {/* 2. แท็บเลือกช่วงเวลา (Monthly vs Yearly) */}
-      <div className="w-full grid grid-cols-2 gap-2 mt-3">
         <button
           type="button"
           onClick={() => setPeriod('monthly')}
@@ -58,26 +43,26 @@ export default function LeaderboardPage() {
         </button>
       </div>
 
-      {/* 3. กล่องของรางวัล TOP 1-3 (ตามดีไซน์รูปภาพ) */}
-      <div className="w-full bg-white rounded-3xl p-6 shadow-sm mt-4 relative pb-12">
-        <h2 className="text-sm font-bold text-center text-black mb-5">
+      {/* 2. กล่องของรางวัล TOP 1-3 */}
+      <div className="w-full bg-white rounded-3xl p-6 sm:p-8 shadow-sm mt-4">
+        <h2 className="text-sm font-bold text-center text-black mb-6">
           ของรางวัลสำหรับ TOP 1-3 {isMonthly ? 'ประจำเดือนนี้' : 'ประจำปี'}
         </h2>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           {/* ซ้าย: เฟรมรูป */}
           <div className="flex flex-col items-center text-center sm:w-1/2">
-            <div className="relative w-24 h-24 flex items-center justify-center mb-2">
+            <div className="relative w-28 h-28 flex items-center justify-center mb-2">
               <div
-                className={`w-20 h-20 rounded-full border-4 flex items-center justify-center bg-gray-50 ${
+                className={`w-24 h-24 rounded-full border-4 flex items-center justify-center bg-gray-50 ${
                   isMonthly ? 'border-orange-400' : 'border-indigo-300'
                 } shadow-md`}
               >
-                <span className="text-2xl">{isMonthly ? '🔥' : '👑'}</span>
+                <span className="text-3xl">{isMonthly ? '🔥' : '👑'}</span>
               </div>
             </div>
 
-            <p className="text-[10px] font-bold text-gray-800 leading-tight">
+            <p className="text-[11px] font-bold text-gray-800 leading-tight">
               เฟรมลิมิเต็ด{isMonthly ? 'ประจำเดือน' : 'ประจำปี'}<br />
               เฉพาะ{isMonthly ? 'เดือนนี้' : 'ปีนี้'}เท่านั้น!!<br />
               <span className="font-normal text-gray-500">สำหรับนักรีวิวยอดเยี่ยม</span>
@@ -85,51 +70,31 @@ export default function LeaderboardPage() {
           </div>
 
           {/* ขวา: แท็กชื่อ TOP 1-3 */}
-          <div className="flex flex-col gap-2 sm:w-1/2 w-full">
-            <p className="text-[10px] text-gray-500 text-center sm:text-left">
+          <div className="flex flex-col gap-2.5 sm:w-1/2 w-full">
+            <p className="text-[10px] text-gray-500 text-center sm:text-left mb-1">
               พร้อมกับแท็กหลังชื่อสุดเก๋ ติดท้ายอวดความเจ๋ง
             </p>
 
-            <div className="flex items-center gap-2 bg-[#ffdf9e] px-3 py-1.5 rounded-full text-xs font-bold text-gray-900">
+            <div className="flex items-center gap-2 bg-[#ffdf9e] px-4 py-2 rounded-full text-xs font-bold text-gray-900 shadow-xs">
               <span>🥇 1</span>
               <span>นักรีวิว TOP 1 {isMonthly ? 'ประจำเดือน' : 'ประจำปี'}</span>
             </div>
 
-            <div className="flex items-center gap-2 bg-[#fbe7b3] px-3 py-1.5 rounded-full text-xs font-bold text-gray-900">
+            <div className="flex items-center gap-2 bg-[#fbe7b3] px-4 py-2 rounded-full text-xs font-bold text-gray-900 shadow-xs">
               <span>🥈 2</span>
               <span>นักรีวิว TOP 2 {isMonthly ? 'ประจำเดือน' : 'ประจำปี'}</span>
             </div>
 
-            <div className="flex items-center gap-2 bg-[#faecc7] px-3 py-1.5 rounded-full text-xs font-bold text-gray-900">
+            <div className="flex items-center gap-2 bg-[#faecc7] px-4 py-2 rounded-full text-xs font-bold text-gray-900 shadow-xs">
               <span>🥉 3</span>
               <span>นักรีวิว TOP 3 {isMonthly ? 'ประจำเดือน' : 'ประจำปี'}</span>
             </div>
           </div>
         </div>
-
-        {/* แถบลำดับของคุณ (#6) ลอยทับล่างสุด */}
-        <div className="absolute -bottom-5 left-4 right-4 bg-[#fce49b] rounded-2xl p-2.5 shadow-md flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/80 px-2 py-0.5 rounded-lg text-center">
-              <span className="block text-[8px] text-gray-500 font-medium">ลำดับของคุณ</span>
-              <span className="text-xs font-black text-black">#6</span>
-            </div>
-            <span className="font-bold text-xs tracking-wider text-black">USERNAME</span>
-          </div>
-
-          <div className="text-right">
-            <div className="text-[11px] font-bold text-gray-900">
-              รีวิวอีก {isMonthly ? '3' : '21'} เรื่อง
-            </div>
-            <div className="text-[10px] font-bold text-green-700">
-              ↑ เพื่อขึ้น อันดับ 5
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* 4. ตารางจัดอันดับ (Leaderboard List) ต่อด้านล่าง */}
-      <div className="w-full mt-10 bg-white rounded-3xl p-5 shadow-sm space-y-2">
+      {/* 3. ตารางจัดอันดับ (Leaderboard List) */}
+      <div className="w-full mt-4 bg-white rounded-3xl p-5 sm:p-6 shadow-sm space-y-2">
         <h3 className="text-xs font-bold text-gray-500 mb-3 px-2">
           ตารางอันดับนักรีวิว
         </h3>
@@ -152,6 +117,30 @@ export default function LeaderboardPage() {
             </span>
           </div>
         ))}
+      </div>
+
+      {/* 4. Floating Bar: ลอยตรึงอยู่กึ่งกลางล่างสุดของหน้าจอเสมอ */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-xl bg-[#fce49b] rounded-2xl p-3 shadow-lg flex items-center justify-between border border-amber-200">
+        {/* ฝั่งซ้าย: ป้ายลำดับและ Username */}
+        <div className="flex items-center gap-3">
+          <div className="bg-white/90 px-3 py-1 rounded-xl text-center shadow-xs">
+            <span className="block text-[8px] text-gray-500 font-medium">ลำดับของคุณ</span>
+            <span className="text-sm font-black text-black">#6</span>
+          </div>
+          <span className="font-bold text-xs sm:text-sm tracking-wider text-black">
+            USERNAME
+          </span>
+        </div>
+
+        {/* ฝั่งขวา: จำนวนที่ต้องรีวิวเพิ่ม */}
+        <div className="text-right">
+          <div className="text-xs font-bold text-gray-900">
+            รีวิวอีก {isMonthly ? '3' : '21'} เรื่อง
+          </div>
+          <div className="text-[10px] font-bold text-emerald-700 flex items-center justify-end gap-0.5">
+            <span>↑</span> เพื่อขึ้น อันดับ 5
+          </div>
+        </div>
       </div>
 
     </div>
