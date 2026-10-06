@@ -4,11 +4,55 @@ import { useNavigate } from 'react-router-dom';
 export default function CategoryCard({ onSearch, maxSelect = 5 }) {
   const navigate = useNavigate();
 
-  // 1. ตั้งค่าเริ่มต้นเป็นอาร์เรย์ว่าง [] เพื่อให้ยังไม่ถูกเลือกทั้งหมวดหลักและหมวดรอง
+  // 1. ตั้งค่าเริ่มต้นเป็นอาร์เรย์ว่าง []
   const [mainCategories, setMainCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
 
-  // 2. รายการหมวดหลัก (ปรับตามหมวดหมู่สำรวจมาตรฐานของเว็บนิยาย/อ่านหนังสือ)
+  // ฐานข้อมูลหนังสือสำหรับกรองตามหมวดหมู่ที่เลือก
+  const bookDatabase = [
+    {
+      id: 1,
+      title: 'เขมจิราต้องรอด',
+      category: 'วาย (Yaoi / BL)',
+      subCategory: 'ดราม่า/หน่วงตับ',
+      image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=1000',
+      synopsis: 'เรื่องราวของเขมจิรา ชายหนุ่มที่เกิดมาพร้อมกับดวงชะตาต้องคำสาปของตระกูล ทุกคนที่เกิดมามักจะต้องพบกับจุดจบก่อนวัยเบญจเพส ทางรอดเดียวคือการผูกชะตาและพึ่งพาบารมีของผู้มีวิชาอาคมแก่กล้า ท่ามกลางอันตรายและเรื่องราวลี้ลับที่คืบคลานเข้ามาใกล้ทุกขณะ'
+    },
+    {
+      id: 2,
+      title: 'สืบลับคดีพิศวง',
+      category: 'สืบสวนสอบสวน',
+      subCategory: 'เอาชีวิตรอด',
+      image: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=1000',
+      synopsis: 'การสืบสวนคดีฆาตกรรมปริศนาในคฤหาสน์ปิดตาย ที่ซึ่งหลักฐานทุกอย่างชี้ไปยังสิ่งที่ไม่น่าจะเกิดขึ้นได้จริง'
+    },
+    {
+      id: 3,
+      title: 'บ้านวิกลคนประหลาด',
+      category: 'ระทึกขวัญ/สยองขวัญ',
+      subCategory: 'ดราม่า/หน่วงตับ',
+      image: 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=1000',
+      synopsis: 'แผนผังบ้านหลังหนึ่งที่มีพื้นที่ว่างปริศนาซ่อนอยู่ นำไปสู่การขุดคุ้ยความลับดำมืดของครอบครัวที่ไม่มีใครกล้าพูดถึง'
+    },
+    {
+      id: 4,
+      title: 'เพราะเราคู่กัน',
+      category: 'วาย (Yaoi / BL)',
+      subCategory: 'โรงเรียน/มหาลัย',
+      image: 'https://images.unsplash.com/photo-1532012164546-f432f2e37b73?q=80&w=1000',
+      synopsis: 'เรื่องราวความรักสุดป่วนในรั้วมหาวิทยาลัย เมื่อต้องขอร้องให้หนุ่มฮอตมาแกล้งเป็นแฟนหลอกๆ จนกลายเป็นความรู้สึกจริง'
+    },
+    {
+      id: 5,
+      title: 'ราชันเร้นลับ',
+      category: 'แฟนตาซี',
+      subCategory: 'เกิดใหม่/ต่างโลก',
+      image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1000',
+      synopsis: 'โจวหมิงรุ่ยตื่นขึ้นมาในร่างของไคลน์ โมเร็ตติ ในโลกยุควิกตอเรียนที่เต็มไปด้วยเวทมนตร์ ปริศนา และเทพโบราณ'
+    }
+  ];
+
+  // 2. รายการหมวดหลัก
   const mainList = [
     'รักโรแมนติก',
     'แฟนตาซี',
@@ -22,7 +66,7 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
     'วรรณกรรม/ชีวิต'
   ];
 
-  // 3. รายการหมวดรอง (Sub-genres ยอดนิยม)
+  // 3. รายการหมวดรอง
   const subList = [
     'เกิดใหม่/ต่างโลก',
     'ระบบ/เกมออนไลน์',
@@ -53,11 +97,23 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
       return;
     }
 
+    // กรองหนังสือตามหมวดหลักที่เลือก (ถ้าไม่มีเล่มไหนตรง ให้แสดงหนังสือทั้งหมดแทน)
+    let filteredBooks = bookDatabase.filter((book) =>
+      mainCategories.includes(book.category)
+    );
+
+    if (filteredBooks.length === 0) {
+      filteredBooks = bookDatabase;
+    }
+
     if (onSearch) {
       onSearch({ main: mainCategories, sub: subCategories });
     }
-   
-    navigate('/swipeforbooks');
+    
+    // ส่งรายการหนังสือที่กรองแล้วไปยังหน้า Swipeforbooks
+    navigate('/swipeforbooks', {
+      state: { bookList: filteredBooks }
+    });
   };
 
   return (
@@ -89,7 +145,7 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
         </div>
       </div>
 
-      {/* --- หมวดหมู่แถวที่ 2: หมวดรอง (แก้คำผิดจากหมวดหลักเป็นหมวดรอง) --- */}
+      {/* --- หมวดหมู่แถวที่ 2: หมวดรอง --- */}
       <div className="space-y-3 mb-8">
         <h2 className="text-xs font-bold text-black">
           เลือกหมวดรอง
