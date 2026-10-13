@@ -1,5 +1,6 @@
 import closeIcon from "../assets/close.png";
 import NaiinLogo from "../assets/Naiin-logo.png";
+import MebLogo from "../assets/meb-logo.png";
 
 export default function BookStoreModel({ onClose }) {
   return (
@@ -35,11 +36,20 @@ export default function BookStoreModel({ onClose }) {
           </div>
           <div className="flex flex-row items-center bg-white px-4 py-4 rounded-2xl shadow-sm hover:bg-gray-200">
             <img
-              src={NaiinLogo}
-              alt="Naiin-logo"
+              src={MebLogo}
+              alt="Meb-logo"
               className="w-15 h-15 rounded-2xl mr-3"
             />
-            <p className="text-2xl">Naiin</p>
+            <div>
+              <p className="text-2xl mr-3">Meb</p>
+              <div className="flex flex-row">
+                <p className="text-2xl mr-3 font-semibold">Price</p>
+                <p className="text-2xl mr-3 text-emerald-700 font-bold">
+                  479.00
+                </p>
+                <p className="text-2xl font-semibold">Bath</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

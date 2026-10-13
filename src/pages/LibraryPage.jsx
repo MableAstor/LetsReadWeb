@@ -3,9 +3,12 @@ import LibraryNavbar from "../components/LibraryNavbar";
 import WanttoReads from "../components/WanttoRead";
 import WanttoBuy from "../components/WanttoBuy";
 import BookStoreModel from "../components/BookStoreModel";
+import Savebookfrom from "../components/Savebookfrom";
+import SaveBookModel from "../components/SaveBookModel";
 export default function LibraryPage() {
-  const [activeTab, setActiveTab] = useState("wantToBuy");
+  const [activeTab, setActiveTab] = useState("savedBooks");
   const [isBookStoreOpen, setIsBookStoreOpen] = useState(false);
+  const [isBookSaveOpen, setIsBookSaveOpen] = useState(false);
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4">
@@ -41,10 +44,10 @@ export default function LibraryPage() {
 
         {activeTab === "savedBooks" && (
           <div>
-            <h2 className="text-lg font-semibold mb-4">
-              Saved Books
-            </h2>
-
+              <Savebookfrom onClick={() => setIsBookSaveOpen(true)} />
+                {isBookSaveOpen && (
+                  <SaveBookModel onClose={() => setIsBookSaveOpen(false)}/>
+                )}
           </div>
         )}
 

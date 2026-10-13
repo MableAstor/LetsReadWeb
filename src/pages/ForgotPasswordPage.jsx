@@ -13,15 +13,9 @@ export default function ForgotPasswordPage() {
 
   return (
     // พื้นหลังไล่เฉดสีชมพูพีชไปส้มอ่อนเต็มจอ จัดองค์ประกอบกึ่งกลาง
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#ffd3cb] via-[#ffd6c0] to-[#fed3a7] flex flex-col items-center justify-center p-4 font-sans relative">
-      
-      {/* ข้อความบอกชื่อหน้ามุมซ้ายบน */}
-      <span className="absolute top-4 left-6 text-gray-400 text-xs font-medium">
-        forgot
-      </span>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 relative font-sans ">
 
-      <div className="w-full max-w-sm flex flex-col items-center">
-        
+      <div className="relative w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl p-8 sm:p-12 md:p-16 flex flex-col  items-center justify-between gap-10">
         {/* ไอคอนรูปเล่มหนังสือเปิด */}
         <div className="w-20 h-20 mb-3 text-black flex items-center justify-center">
           <svg
@@ -39,8 +33,8 @@ export default function ForgotPasswordPage() {
         </div>
 
         {/* ข้อความคำแนะนำ */}
-        <h1 className="text-base font-semibold text-black text-center mb-6 leading-snug">
-          please type in your email <br /> address
+        <h1 className="text-base text-md font-bold text-black text-center mb-6 leading-snug">
+          Enter the email address associated with your account<br/>to receive a password reset link.
         </h1>
 
         {/* ฟอร์มกรอก Email และปุ่มกดยืนยัน */}
@@ -54,7 +48,7 @@ export default function ForgotPasswordPage() {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-white rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none shadow-sm"
+              className="w-full px-4 py-3 bg-white rounded-lg text-xs text-gray-800 placeholder-gray-400 focus:outline-none shadow-sm"
               required
             />
           </div>
@@ -63,7 +57,7 @@ export default function ForgotPasswordPage() {
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-2 bg-white hover:bg-gray-50 text-black text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
+              className="w-full py-3 bg-white hover:bg-gray-50 text-black text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
             >
               Confirm
             </button>
@@ -74,7 +68,7 @@ export default function ForgotPasswordPage() {
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="w-full py-2 bg-white hover:bg-gray-50 text-black text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
+              className="w-full py-3 bg-white hover:bg-gray-50 text-black text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
             >
               Go back
             </button>

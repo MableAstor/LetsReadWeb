@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { Headbar } from "./components/Headbar";
 import HomePage from "./pages/HomePage";
 import FeedPage from "./pages/FeedPage";
@@ -11,13 +11,24 @@ import LoginPage from"./pages/LoginPage";
 import SigninPage from"./pages/SigninPage";
 import LeaderboardPage from "./pages/Leaderboard";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import LandingPage from "./pages/LandingPage";
 export default function App() {
+  const location = useLocation();
+  const showHeadbar = !["/", "/Login", "/Signin", "/forgotpass"].includes(location.pathname);
+  const isAuthPage = ["/Login", "/Signin", "/forgotpass"].includes(location.pathname);
   return (
-    <div className="min-h-screen bg-[#FCD8CD] flex flex-col items-center">
-      <Headbar />
+    <div
+      className={`min-h-screen flex flex-col items-center ${
+        isAuthPage
+          ? "bg-gradient-to-tr from-[#dce7f8] via-[#f7e4e5] to-[#fdedcd]"
+          : "bg-[#FCD8CD]"
+      }`}
+    >
+      {showHeadbar && <Headbar />}
       <main className="w-full max-w-6xl flex justify-center">
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/swipe" element={<SwipePage />} />
@@ -26,6 +37,7 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/Result" element={<ResultPage />} />
           <Route path="/Login"element={<LoginPage/>}/>
+          <Route path="/Signin"element={<SigninPage/>}/>
           <Route path ="/forgotpass"element={<ForgotPasswordPage/>}/>
         </Routes>
       </main>
