@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import FacebookIcon from "../assets/facebook-logo.png";
 import LineIcon from "../assets/line-logo.png";
 import googleIcon from "../assets/google-logo.png";
+import { supabase } from "../lib/supabase";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -13,6 +14,33 @@ export default function LoginPage() {
   const handleClose = () => {
     navigate(-1);
   };
+
+  const [socialLoading, setSocialLoading] = useState("");
+
+const handleSocialLogin = async (provider) => {
+  if (socialLoading) return;
+
+  setSocialLoading(provider);
+
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/home`,
+      },
+    });
+
+    if (error) {
+      console.error("Social login error:", error);
+      alert(`เข้าสู่ระบบไม่สำเร็จ: ${error.message}`);
+      setSocialLoading("");
+    }
+  } catch (error) {
+    console.error("Social login error:", error);
+    alert("เกิดข้อผิดพลาดระหว่างเข้าสู่ระบบ กรุณาลองใหม่");
+    setSocialLoading("");
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,11 +64,26 @@ export default function LoginPage() {
         return;
       }
 
-      console.log("Login successful:", result);
+      const { session } = result;
+
+      if (!session?.access_token || !session?.refresh_token) {
+        alert("ไม่พบข้อมูล Session กรุณาลองเข้าสู่ระบบใหม่");
+        return;
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+
+      if (sessionError) {
+        console.error("Set session error:", sessionError);
+        alert("ไม่สามารถบันทึกสถานะเข้าสู่ระบบได้");
+        return;
+      }
 
       alert("เข้าสู่ระบบสำเร็จ");
-
-      navigate("/home");
+      navigate("/home", { replace: true });
     } catch (error) {
       console.error("Login error:", error);
       alert("ไม่สามารถเชื่อมต่อ Server ได้");
@@ -166,6 +209,7 @@ export default function LoginPage() {
             {/* ปุ่ม Facebook */}
             <button
               type="button"
+              onClick={() => handleSocialLogin("facebook")}
               className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#1877F2] to-[#92bcf7] shadow-sm hover:opacity-95 transition cursor-pointer"
             >
               <img
@@ -183,6 +227,7 @@ export default function LoginPage() {
             {/* ปุ่ม Google */}
             <button
               type="button"
+              onClick={() => handleSocialLogin("google")}
               className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] border border-gray-100 shadow-sm hover:opacity-95 transition cursor-pointer"
             >
               <img
@@ -199,6 +244,7 @@ export default function LoginPage() {
             {/* ปุ่ม Line */}
             <button
               type="button"
+              onClick={() => handleSocialLogin("custom:line-oauth")}
               className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#06C755] to-[#97f2a9] shadow-sm hover:opacity-95 transition cursor-pointer"
             >
               <img

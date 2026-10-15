@@ -4,6 +4,7 @@ import FacebookIcon from "../assets/facebook-logo.png";
 import LineIcon from "../assets/line-logo.png";
 import googleIcon from "../assets/google-logo.png";
 import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 export default function SignInPage() {
   const navigate = useNavigate();
@@ -56,6 +57,20 @@ export default function SignInPage() {
       alert("ไม่สามารถเชื่อมต่อ Server ได้");
     }
   };
+
+  const handleSocialLogin = async (provider) => {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${window.location.origin}/home`,
+    },
+  });
+
+  if (error) {
+    console.error("Social login error:", error);
+    alert("เข้าสู่ระบบไม่สำเร็จ: " + error.message);
+  }
+};
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative font-sans">
@@ -209,6 +224,7 @@ export default function SignInPage() {
             {/* ปุ่ม Facebook */}
             <button
               type="button"
+              onClick={() => handleSocialLogin("facebook")}
               className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#1877F2] to-[#92bcf7] shadow-sm hover:opacity-95 transition cursor-pointer"
             >
               <img
@@ -225,6 +241,7 @@ export default function SignInPage() {
             {/* ปุ่ม Google */}
             <button
               type="button"
+              onClick={() => handleSocialLogin("google")}
               className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] border border-gray-100 shadow-sm hover:opacity-95 transition cursor-pointer"
             >
               <img
@@ -241,6 +258,7 @@ export default function SignInPage() {
             {/* ปุ่ม Line */}
             <button
               type="button"
+              onClick={() => handleSocialLogin("custom:line")}
               className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#06C755] to-[#97f2a9] shadow-sm hover:opacity-95 transition cursor-pointer"
             >
               <img

@@ -5,7 +5,7 @@ import profileIcon from "../assets/profile-icon.png";
 export const Headbar = () => {
   const location = useLocation(); 
   const navItems = [
-    { name: "Home", path: "/" },
+    { name: "Home", path: "/home" },
     { name: "Feed", path: "/feed" },
     { name: "Leaderboard", path: "/leaderboard" },
     { name: "Swipe", path: "/swipe" },
