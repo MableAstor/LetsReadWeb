@@ -1,58 +1,146 @@
-import closeIcon from "../assets/close.png";
+
+import { ExternalLink, Store } from "lucide-react";
+
 import NaiinLogo from "../assets/Naiin-logo.png";
 import MebLogo from "../assets/meb-logo.png";
 
-export default function BookStoreModel({ onClose }) {
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+
+import { Card, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
+
+const stores = [
+  {
+    id: "naiin",
+    name: "Naiin",
+    image: NaiinLogo,
+    price: 474.05,
+  },
+  {
+    id: "meb",
+    name: "Meb",
+    image: MebLogo,
+    price: 479.0,
+  },
+];
+
+export default function BookStoreModel({
+  open = false,
+  onClose,
+  onSelectStore,
+}) {
   return (
-    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-4xl mx-auto rounded-2xl  bg-white p-6 shadow-xl">
-        <div className="flex justify-between items-center  gap-8 mb-6 ">
-          <p className="text-xl font-bold"> Book Store Available </p>
-          <button onClick={onClose} className="cursor-pointer">
-            <img
-              src={closeIcon}
-              alt="close model book store"
-              className="w-5 h-5"
-            />
-          </button>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose?.();
+      }}
+    >
+      <DialogContent
+        className="
+          !w-[calc(100vw-2rem)]
+          !max-w-lg
+          max-h-[85dvh]
+          overflow-y-auto
+          rounded-2xl
+          p-4
+          sm:rounded-3xl
+          sm:p-6
+        "
+      >
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="flex items-center gap-2 text-base font-bold sm:text-lg">
+            <Store className="h-5 w-5 text-[#1D77FF]" />
+            Book Store Available
+          </DialogTitle>
+
+          <DialogDescription className="text-xs sm:text-sm">
+            ร้านหนังสือที่มีจำหน่าย
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-2 flex flex-col gap-3">
+          {stores.map((store) => (
+            <Card
+              key={store.id}
+              className="
+                gap-0 rounded-xl
+                border border-border
+                bg-card py-0
+                shadow-none
+                transition-colors
+                hover:bg-muted/40
+              "
+            >
+              <CardContent
+                className="
+                  flex min-w-0
+                  items-center gap-3
+                  p-3
+                  sm:gap-4 sm:p-4
+                "
+              >
+                {/* Store Logo */}
+                <div
+                  className="
+                    flex h-14 w-14 shrink-0
+                    items-center justify-center
+                    overflow-hidden rounded-xl
+                    bg-white
+                    sm:h-16 sm:w-16
+                  "
+                >
+                  <img
+                    src={store.image}
+                    alt={`${store.name} logo`}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+
+                {/* Store information */}
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold sm:text-base">
+                    {store.name}
+                  </h3>
+
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    ราคา
+                  </p>
+
+                  <p className="text-sm font-bold text-emerald-600 sm:text-base">
+                    ฿{store.price.toFixed(2)}
+                  </p>
+                </div>
+
+                {/* Store action */}
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  disabled={!onSelectStore}
+                  onClick={() =>
+                    onSelectStore?.(store)
+                  }
+                  aria-label={`เปิดร้าน ${store.name}`}
+                  className="
+                    h-8 w-8 shrink-0
+                    rounded-full
+                    sm:h-9 sm:w-9
+                  "
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-        <div className="flex flex-row gap-3">
-          <div className="flex flex-row items-center bg-white px-4 py-4 rounded-2xl shadow-sm hover:bg-gray-200">
-            <img
-              src={NaiinLogo}
-              alt="Naiin-logo"
-              className="w-15 h-15 rounded-2xl mr-3"
-            />
-            <div>
-              <p className="text-2xl mr-3">Naiin</p>
-              <div className="flex flex-row">
-                <p className="text-2xl mr-3 font-semibold">Price</p>
-                <p className="text-2xl mr-3 text-emerald-700 font-bold">
-                  474.05
-                </p>
-                <p className="text-2xl font-semibold">Bath</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-row items-center bg-white px-4 py-4 rounded-2xl shadow-sm hover:bg-gray-200">
-            <img
-              src={MebLogo}
-              alt="Meb-logo"
-              className="w-15 h-15 rounded-2xl mr-3"
-            />
-            <div>
-              <p className="text-2xl mr-3">Meb</p>
-              <div className="flex flex-row">
-                <p className="text-2xl mr-3 font-semibold">Price</p>
-                <p className="text-2xl mr-3 text-emerald-700 font-bold">
-                  479.00
-                </p>
-                <p className="text-2xl font-semibold">Bath</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -15,6 +15,10 @@ import LandingPage from "./pages/LandingPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SettingsPage from "./pages/SettingsPage";
+import { BottomBar } from "./components/Bottombar";
+import PreviewUI from "./pages/PreviewUI";
+import ViralBooksPage from "./pages/ViralBooksPage";
+import Top100Page from "./pages/Top100Page";
 export default function App() {
   const location = useLocation();
   const showHeadbar = ![
@@ -32,15 +36,33 @@ export default function App() {
   ].includes(location.pathname);
   return (
     <div
-      className={`min-h-screen flex flex-col items-center ${
+      className={`min-h-screen flex flex-col w-full ${
         isAuthPage
           ? "bg-gradient-to-tr from-[#dce7f8] via-[#f7e4e5] to-[#fdedcd]"
           : "bg-[#FCD8CD]"
       }`}
     >
-      {showHeadbar && <Headbar />}
-      <main className="w-full max-w-6xl flex justify-center">
-        <Routes>
+      {/* PC และ iPad */}
+      {showHeadbar && (
+        <div className="hidden md:block w-full">
+          <Headbar />
+        </div>
+      )}
+
+      {/* Mobile */}
+      {showHeadbar && (
+        <div className="md:hidden">
+          <BottomBar />
+        </div>
+      )}
+
+      <main
+  className={`w-full min-w-0 flex-1 ${
+    showHeadbar ? "pb-24 md:pb-0" : ""
+  }`}
+>
+  <div className="mx-auto w-full min-w-0 max-w-6xl">
+    <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route
             path="/home"
@@ -156,14 +178,19 @@ export default function App() {
             }
           />
           <Route
-  path="/settings/profile"
-  element={
-    <ProtectedRoute>
-      <SettingsPage />
-    </ProtectedRoute>
-  }
-/>
+            path="/settings/profile"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/preview-ui" element={<PreviewUI />} />
+          <Route path="/viral-books" element={<ViralBooksPage />} />
+      <Route path="/top-100" element={<Top100Page />} />
         </Routes>
+  </div>
+        
       </main>
     </div>
   );

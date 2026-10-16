@@ -1,21 +1,81 @@
-import React from "react";
-import khemjira from "../assets/khemjira.gif";
-export default function WanttoBuy({onClick}) {
+
+import { useState } from "react";
+import { ExternalLink, Store } from "lucide-react";
+
+import { BookCard } from "./BookCard";
+import { libraryBooks } from "../data/books";
+import { Button } from "./ui/button";
+import BookStoreModel from "./BookStoreModel";
+
+export default function WanttoBuy({
+  book = libraryBooks[0],
+  onClick,
+  onOfficialStoreClick,
+}) {
+  const [showStores, setShowStores] = useState(false);
+
+  if (!book) return null;
+
+  const handleBookStore = () => {
+    setShowStores(true);
+    onClick?.();
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 w-60">
-      <img
-        src={khemjira}
-        alt="Book Cover"
-        className="w-full h-65 object-cover rounded-md mb-2"
+    <>
+      <div
+        className="
+          mx-auto flex w-full min-w-0
+          max-w-[190px] flex-col
+          gap-2
+          sm:max-w-[210px]
+        "
+      >
+        {/* Shared BookCard */}
+        <BookCard book={book} />
+
+        {/* Store actions */}
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={!onOfficialStoreClick}
+            onClick={() => onOfficialStoreClick?.(book)}
+            className="
+              h-8 w-full rounded-full
+              bg-[#1D77FF] px-2
+              text-[11px] font-semibold
+              text-white hover:bg-blue-600
+              sm:h-9 sm:text-xs
+            "
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Official Store
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={handleBookStore}
+            className="
+              h-8 w-full rounded-full
+              bg-gray-100 px-2
+              text-[11px] font-semibold
+              text-gray-700 hover:bg-gray-200
+              sm:h-9 sm:text-xs
+            "
+          >
+            <Store className="h-3.5 w-3.5" />
+            Book Store
+          </Button>
+        </div>
+      </div>
+
+      <BookStoreModel
+        open={showStores}
+        onClose={() => setShowStores(false)}
       />
-      <h3 className="text-lg font-bold">Khemjira</h3>
-      <p className="font-semibold mb-1 text-center">Available at </p>
-      <button className="bg-blue-500 text-white px-2 py-2 rounded-full hover:bg-blue-600 w-full mb-2 cursor-pointer">
-        Official Store
-      </button>
-      <button onClick={onClick} className="bg-gray-300 text-gray-700 px-2 py-2 rounded-full hover:bg-gray-400 w-full cursor-pointer">
-        Book Store
-      </button>
-    </div>
+    </>
   );
 }

@@ -1,148 +1,444 @@
-import React, { useState } from 'react';
+
+import { useState } from "react";
+import { ArrowUp, Crown, Trophy } from "lucide-react";
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+
+import { Badge } from "../components/ui/badge";
+
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
 
 export default function LeaderboardPage() {
-  const [period, setPeriod] = useState('monthly'); // 'monthly' | 'yearly'
-  const isMonthly = period === 'monthly';
+  const [period, setPeriod] = useState("monthly");
+  const isMonthly = period === "monthly";
 
-  // รายชื่ออันดับจำลองสำหรับแสดงในหน้า Leaderboard
+  // Mock leaderboard data
   const rankList = [
-    { rank: 1, name: 'Reader_No1', reviews: isMonthly ? 45 : 320, badge: '🥇' },
-    { rank: 2, name: 'BookWorm_A', reviews: isMonthly ? 38 : 290, badge: '🥈' },
-    { rank: 3, name: 'NovelLover', reviews: isMonthly ? 30 : 255, badge: '🥉' },
-    { rank: 4, name: 'BookieBook', reviews: isMonthly ? 25 : 180 },
-    { rank: 5, name: 'StoryTeller', reviews: isMonthly ? 20 : 150 },
-    { rank: 6, name: 'USERNAME (คุณ)', reviews: isMonthly ? 17 : 129, isCurrentUser: true },
+    {
+      rank: 1,
+      name: "Reader_No1",
+      reviews: isMonthly ? 45 : 320,
+      badge: "🥇",
+    },
+    {
+      rank: 2,
+      name: "BookWorm_A",
+      reviews: isMonthly ? 38 : 290,
+      badge: "🥈",
+    },
+    {
+      rank: 3,
+      name: "NovelLover",
+      reviews: isMonthly ? 30 : 255,
+      badge: "🥉",
+    },
+    {
+      rank: 4,
+      name: "BookieBook",
+      reviews: isMonthly ? 25 : 180,
+    },
+    {
+      rank: 5,
+      name: "StoryTeller",
+      reviews: isMonthly ? 20 : 150,
+    },
+    {
+      rank: 6,
+      name: "USERNAME (คุณ)",
+      reviews: isMonthly ? 17 : 129,
+      isCurrentUser: true,
+    },
+  ];
+
+  const currentUser = rankList.find(
+    (user) => user.isCurrentUser
+  );
+
+  const previousRank = rankList.find(
+    (user) => user.rank === currentUser.rank - 1
+  );
+
+  const reviewsNeeded = previousRank
+    ? Math.max(
+        0,
+        previousRank.reviews - currentUser.reviews
+      )
+    : 0;
+
+  const rewardBadges = [
+    {
+      rank: 1,
+      medal: "🥇",
+      color: "bg-[#ffdf9e]",
+    },
+    {
+      rank: 2,
+      medal: "🥈",
+      color: "bg-[#fbe7b3]",
+    },
+    {
+      rank: 3,
+      medal: "🥉",
+      color: "bg-[#faecc7]",
+    },
   ];
 
   return (
-    // pb-28 เว้นช่องว่างด้านล่างเผื่อไว้ให้ Floating Bar ไม่ทับเนื้อหา
-    <div className="w-full max-w-xl mx-auto flex flex-col items-center pb-28 px-4 font-sans text-gray-800 relative">
-      
-      {/* 1. แท็บเลือกช่วงเวลา (Monthly vs Yearly) */}
-      <div className="w-full grid grid-cols-2 gap-2 mt-4">
-        <button
-          type="button"
-          onClick={() => setPeriod('monthly')}
-          className={`py-2 px-3 rounded-xl text-center transition cursor-pointer shadow-sm ${
-            isMonthly ? 'bg-white border-2 border-orange-200' : 'bg-white/70 hover:bg-white'
-          }`}
+    <main
+      className="
+        relative mx-auto flex
+        w-full max-w-xl min-w-0
+        flex-col gap-4
+        px-3 pt-4
+        pb-[220px]
+        text-foreground
+        sm:px-4 sm:pt-6
+        lg:pb-28
+      "
+    >
+      {/* 1. Monthly / Yearly Tabs */}
+      <div className="w-full shrink-0">
+        <Tabs
+          value={period}
+          onValueChange={setPeriod}
+          className="w-full"
         >
-          <div className="text-xs font-bold text-black">Monthly</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">เหลืออีก 5 วัน 24 ชั่วโมง 10 นาที</div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setPeriod('yearly')}
-          className={`py-2 px-3 rounded-xl text-center transition cursor-pointer shadow-sm ${
-            !isMonthly ? 'bg-white border-2 border-purple-200' : 'bg-white/70 hover:bg-white'
-          }`}
-        >
-          <div className="text-xs font-bold text-black">Yearly</div>
-          <div className="text-[10px] text-gray-500 mt-0.5">เหลืออีก 116 วัน 24 ชั่วโมง 10 นาที</div>
-        </button>
-      </div>
-
-      {/* 2. กล่องของรางวัล TOP 1-3 */}
-      <div className="w-full bg-white rounded-3xl p-6 sm:p-8 shadow-sm mt-4">
-        <h2 className="text-sm font-bold text-center text-black mb-6">
-          ของรางวัลสำหรับ TOP 1-3 {isMonthly ? 'ประจำเดือนนี้' : 'ประจำปี'}
-        </h2>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-          {/* ซ้าย: เฟรมรูป */}
-          <div className="flex flex-col items-center text-center sm:w-1/2">
-            <div className="relative w-28 h-28 flex items-center justify-center mb-2">
-              <div
-                className={`w-24 h-24 rounded-full border-4 flex items-center justify-center bg-gray-50 ${
-                  isMonthly ? 'border-orange-400' : 'border-indigo-300'
-                } shadow-md`}
-              >
-                <span className="text-3xl">{isMonthly ? '🔥' : '👑'}</span>
-              </div>
-            </div>
-
-            <p className="text-[11px] font-bold text-gray-800 leading-tight">
-              เฟรมลิมิเต็ด{isMonthly ? 'ประจำเดือน' : 'ประจำปี'}<br />
-              เฉพาะ{isMonthly ? 'เดือนนี้' : 'ปีนี้'}เท่านั้น!!<br />
-              <span className="font-normal text-gray-500">สำหรับนักรีวิวยอดเยี่ยม</span>
-            </p>
-          </div>
-
-          {/* ขวา: แท็กชื่อ TOP 1-3 */}
-          <div className="flex flex-col gap-2.5 sm:w-1/2 w-full">
-            <p className="text-[10px] text-gray-500 text-center sm:text-left mb-1">
-              พร้อมกับแท็กหลังชื่อสุดเก๋ ติดท้ายอวดความเจ๋ง
-            </p>
-
-            <div className="flex items-center gap-2 bg-[#ffdf9e] px-4 py-2 rounded-full text-xs font-bold text-gray-900 shadow-xs">
-              <span>🥇 1</span>
-              <span>นักรีวิว TOP 1 {isMonthly ? 'ประจำเดือน' : 'ประจำปี'}</span>
-            </div>
-
-            <div className="flex items-center gap-2 bg-[#fbe7b3] px-4 py-2 rounded-full text-xs font-bold text-gray-900 shadow-xs">
-              <span>🥈 2</span>
-              <span>นักรีวิว TOP 2 {isMonthly ? 'ประจำเดือน' : 'ประจำปี'}</span>
-            </div>
-
-            <div className="flex items-center gap-2 bg-[#faecc7] px-4 py-2 rounded-full text-xs font-bold text-gray-900 shadow-xs">
-              <span>🥉 3</span>
-              <span>นักรีวิว TOP 3 {isMonthly ? 'ประจำเดือน' : 'ประจำปี'}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. ตารางจัดอันดับ (Leaderboard List) */}
-      <div className="w-full mt-4 bg-white rounded-3xl p-5 sm:p-6 shadow-sm space-y-2">
-        <h3 className="text-xs font-bold text-gray-500 mb-3 px-2">
-          ตารางอันดับนักรีวิว
-        </h3>
-
-        {rankList.map((user) => (
-          <div
-            key={user.rank}
-            className={`flex items-center justify-between px-4 py-2.5 rounded-xl transition ${
-              user.isCurrentUser ? 'bg-[#fff5d6] border border-amber-300 font-bold' : 'hover:bg-gray-50'
-            }`}
+          <TabsList
+            className="
+              grid !h-auto w-full
+              grid-cols-2 gap-2
+              bg-transparent p-0
+              shadow-none
+            "
           >
-            <div className="flex items-center gap-3">
-              <span className="w-6 text-xs font-black text-center text-gray-600">
-                {user.badge || `#${user.rank}`}
+            <TabsTrigger
+              value="monthly"
+              className="
+                !h-auto min-h-[68px] min-w-0
+                flex flex-col items-center justify-center
+                gap-1 rounded-xl border
+                border-transparent
+                bg-white px-2 py-3
+                text-center whitespace-normal
+                shadow-sm
+                data-[state=active]:border-orange-300
+                data-[state=active]:bg-white
+                data-[state=active]:shadow-sm
+                sm:px-3
+              "
+            >
+              <span className="text-xs font-bold text-gray-900 sm:text-sm">
+                Monthly
               </span>
-              <span className="text-xs text-gray-800">{user.name}</span>
+
+              <span className="text-center text-[10px] leading-snug text-gray-500">
+                เหลืออีก 5 วัน 24 ชั่วโมง 10 นาที
+              </span>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="yearly"
+              className="
+                !h-auto min-h-[68px] min-w-0
+                flex flex-col items-center justify-center
+                gap-1 rounded-xl border
+                border-transparent
+                bg-white px-2 py-3
+                text-center whitespace-normal
+                shadow-sm
+                data-[state=active]:border-purple-300
+                data-[state=active]:bg-white
+                data-[state=active]:shadow-sm
+                sm:px-3
+              "
+            >
+              <span className="text-xs font-bold text-gray-900 sm:text-sm">
+                Yearly
+              </span>
+
+              <span className="text-center text-[10px] leading-snug text-gray-500">
+                เหลืออีก 116 วัน 24 ชั่วโมง 10 นาที
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* 2. Top 1–3 Rewards */}
+      <Card
+        className="
+          w-full min-w-0 gap-4
+          rounded-2xl border-0
+          bg-card py-5 shadow-sm
+          sm:rounded-3xl sm:py-6
+        "
+      >
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle
+            className="
+              text-center text-sm
+              font-bold leading-relaxed
+              sm:text-base
+            "
+          >
+            ของรางวัลสำหรับ TOP 1-3
+
+            <span className="block">
+              {isMonthly ? "ประจำเดือนนี้" : "ประจำปี"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="px-4 sm:px-6">
+          <div
+            className="
+              grid grid-cols-1
+              items-center gap-5
+              sm:grid-cols-2 sm:gap-6
+            "
+          >
+            {/* Limited Frame */}
+            <div className="flex min-w-0 flex-col items-center text-center">
+              <div
+                className={`
+                  flex h-24 w-24
+                  items-center justify-center
+                  rounded-full border-4
+                  bg-muted/40 shadow-md
+                  sm:h-28 sm:w-28
+                  ${
+                    isMonthly
+                      ? "border-orange-400"
+                      : "border-indigo-300"
+                  }
+                `}
+              >
+                {isMonthly ? (
+                  <span className="text-4xl">🔥</span>
+                ) : (
+                  <Crown className="h-12 w-12 text-amber-500" />
+                )}
+              </div>
+
+              <p className="mt-3 text-xs font-bold leading-relaxed">
+                เฟรมลิมิเต็ด
+                {isMonthly ? "ประจำเดือน" : "ประจำปี"}
+
+                <span className="block">
+                  เฉพาะ
+                  {isMonthly ? "เดือนนี้" : "ปีนี้"}
+                  เท่านั้น!!
+                </span>
+              </p>
+
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                สำหรับนักรีวิวยอดเยี่ยม
+              </p>
             </div>
-            <span className="text-xs text-gray-500 font-medium">
-              {user.reviews} รีวิว
+
+            {/* Reward Badges */}
+            <div className="flex min-w-0 flex-col gap-2.5">
+              <p className="mb-1 text-center text-[11px] leading-relaxed text-muted-foreground sm:text-left">
+                พร้อมกับแท็กหลังชื่อสุดเก๋
+                ติดท้ายอวดความเจ๋ง
+              </p>
+
+              {rewardBadges.map((item) => (
+                <Badge
+                  key={item.rank}
+                  variant="secondary"
+                  className={`
+                    flex min-h-10 w-full
+                    items-center justify-start
+                    gap-2 rounded-full
+                    border-0 px-3 py-2
+                    text-left text-[11px]
+                    font-bold text-gray-900
+                    whitespace-normal shadow-xs
+                    sm:text-xs
+                    ${item.color}
+                  `}
+                >
+                  <span className="shrink-0 text-base">
+                    {item.medal}
+                  </span>
+
+                  <span className="min-w-0 leading-snug">
+                    นักรีวิว TOP {item.rank}
+                    {isMonthly
+                      ? " ประจำเดือน"
+                      : " ประจำปี"}
+                  </span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 3. Leaderboard Rankings */}
+      <Card
+        className="
+          w-full min-w-0 gap-3
+          rounded-2xl border-0
+          bg-card py-4 shadow-sm
+          sm:rounded-3xl sm:py-5
+        "
+      >
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle
+            className="
+              flex items-center gap-2
+              text-sm font-bold
+              sm:text-base
+            "
+          >
+            <Trophy className="h-4 w-4 text-amber-500" />
+            ตารางอันดับนักรีวิว
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-2 px-3 sm:px-5">
+          {rankList.map((user) => (
+            <div
+              key={user.rank}
+              className={`
+                flex w-full min-w-0
+                items-center justify-between
+                gap-2 rounded-xl
+                px-3 py-3 transition-colors
+                sm:gap-3 sm:px-4
+                ${
+                  user.isCurrentUser
+                    ? "border border-amber-300 bg-[#fff5d6]"
+                    : "hover:bg-muted/50"
+                }
+              `}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                <span
+                  className="
+                    flex w-7 shrink-0
+                    items-center justify-center
+                    text-sm font-bold text-gray-600
+                  "
+                >
+                  {user.badge || `#${user.rank}`}
+                </span>
+
+                <span
+                  className={`
+                    min-w-0 truncate
+                    text-xs sm:text-sm
+                    ${
+                      user.isCurrentUser
+                        ? "font-bold text-gray-900"
+                        : "text-foreground"
+                    }
+                  `}
+                  title={user.name}
+                >
+                  {user.name}
+                </span>
+              </div>
+
+              <span
+                className="
+                  shrink-0 text-right
+                  text-xs font-medium
+                  text-gray-500 sm:text-sm
+                "
+              >
+                {user.reviews} รีวิว
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* 4. Floating Current User Ranking */}
+      {/* Mobile: above Bottom Navigation */}
+      {/* Desktop: bottom of viewport */}
+      <Card
+        className="
+          fixed
+          bottom-[calc(88px+env(safe-area-inset-bottom))]
+          left-1/2 z-40
+          w-[calc(100%-2rem)]
+          max-w-xl
+          -translate-x-1/2
+
+          rounded-2xl
+          border border-amber-200
+          bg-[#fce49b]
+          py-0 text-gray-900
+          shadow-lg
+
+          lg:bottom-4
+        "
+      >
+        <CardContent
+          className="
+            flex min-w-0
+            items-center justify-between
+            gap-2 px-3 py-3
+            sm:gap-4 sm:px-4
+          "
+        >
+          {/* User Rank */}
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <div
+              className="
+                shrink-0 rounded-xl
+                bg-white/90 px-3 py-1.5
+                text-center shadow-xs
+              "
+            >
+              <span className="block text-[9px] font-medium text-gray-500">
+                ลำดับของคุณ
+              </span>
+
+              <span className="block text-sm font-black">
+                #{currentUser.rank}
+              </span>
+            </div>
+
+            <span className="min-w-0 truncate text-xs font-bold sm:text-sm">
+              USERNAME
             </span>
           </div>
-        ))}
-      </div>
 
-      {/* 4. Floating Bar: ลอยตรึงอยู่กึ่งกลางล่างสุดของหน้าจอเสมอ */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-xl bg-[#fce49b] rounded-2xl p-3 shadow-lg flex items-center justify-between border border-amber-200">
-        {/* ฝั่งซ้าย: ป้ายลำดับและ Username */}
-        <div className="flex items-center gap-3">
-          <div className="bg-white/90 px-3 py-1 rounded-xl text-center shadow-xs">
-            <span className="block text-[8px] text-gray-500 font-medium">ลำดับของคุณ</span>
-            <span className="text-sm font-black text-black">#6</span>
-          </div>
-          <span className="font-bold text-xs sm:text-sm tracking-wider text-black">
-            USERNAME
-          </span>
-        </div>
+          {/* Reviews Needed */}
+          <div className="shrink-0 text-right">
+            <p className="text-[11px] font-bold sm:text-xs">
+              รีวิวอีก {reviewsNeeded} เรื่อง
+            </p>
 
-        {/* ฝั่งขวา: จำนวนที่ต้องรีวิวเพิ่ม */}
-        <div className="text-right">
-          <div className="text-xs font-bold text-gray-900">
-            รีวิวอีก {isMonthly ? '3' : '21'} เรื่อง
+            <div
+              className="
+                flex items-center
+                justify-end gap-1
+                text-[10px] font-bold
+                text-emerald-700 sm:text-xs
+              "
+            >
+              <ArrowUp className="h-3 w-3" />
+              <span>
+                เพื่อขึ้นอันดับ {previousRank?.rank ?? 1}
+              </span>
+            </div>
           </div>
-          <div className="text-[10px] font-bold text-emerald-700 flex items-center justify-end gap-0.5">
-            <span>↑</span> เพื่อขึ้น อันดับ 5
-          </div>
-        </div>
-      </div>
-
-    </div>
+        </CardContent>
+      </Card>
+    </main>
   );
 }

@@ -1,43 +1,112 @@
-import profileicon from "../assets/profile-icon.png";
+
+import { Heart, Share2, Bookmark, Star } from "lucide-react";
+
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "./ui/card";
+
+import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 
 export default function ReviewCard() {
-    return (
-        <div className="overflow-y-auto w-full max-w-2xl mx-auto border border-gray-300 rounded-lg border-solid bg-white p-3 gap-2">
-            <div className="flex flex-row items-center mb-3">
-                <img src={profileicon} alt="Profile Icon" className="h-8 w-8 mr-2" />
-                <p className="font-bold">John Doe</p>
+  return (
+    <Card className="mx-auto w-full max-w-2xl gap-0 rounded-xl border-border bg-card py-0 shadow-sm">
+
+      {/* Profile */}
+      <CardHeader className="flex flex-row items-center gap-3 px-4 py-3">
+        <Avatar className="h-10 w-10 shrink-0">
+        <AvatarFallback className="bg-pink-100 text-pink-600">
+          J
+        </AvatarFallback>
+      </Avatar>
+
+        <span className="min-w-0 truncate text-sm font-semibold sm:text-base">
+          Jxneny Eiei
+        </span>
+      </CardHeader>
+
+      {/* Review content */}
+      <CardContent className="px-3 pb-3 sm:px-4">
+        <div className="min-w-0 space-y-3 rounded-lg border border-border p-3 sm:p-4">
+
+          {/* Book title and rating */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h3 className="min-w-0 break-words text-sm font-semibold sm:text-base">
+              Book Title
+            </h3>
+
+            <div
+              className="flex shrink-0 items-center gap-0.5"
+              aria-label="5 out of 5 stars"
+            >
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className="h-4 w-4 fill-yellow-400 text-yellow-400 sm:h-5 sm:w-5"
+                />
+              ))}
             </div>
-            <div className="flex flex-col border border-gray-300 rounded-lg pt-3 px-2 w-full h-28">
-                <div className="flex flex-row gap-1 items-center">
-                    <p className="font-bold">Book Title</p>
-                    <div className="text-xl text-yellow-400">
-                        ★★★★★
-                    </div>
-                    <div className="inline-flex items-center border border-black rounded-full px-3 py-1">
-                        <p className="text-sm">Fantasy</p>
-                    </div>
-                    <div className=" inline-flex items-center border border-black rounded-full px-3 py-1">
-                        <p className="text-sm">Adventure</p>
-                    </div>
-                </div>
-                <p className="text-sm mt-2">This book was an amazing read! The characters were well-developed and the plot kept me hooked from start to finish. Highly recommend to anyone who loves fantasy and adventure!</p>
-            </div>
-            <div className="mt-4 flex items-center gap-6 border-t border-gray-200 pt-3">
+          </div>
 
-                <button className="text-gray-600 hover:text-black">
-                    ♡ Like
-                </button>
+          {/* Categories */}
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="rounded-full px-3 py-1 font-normal">
+              Fantasy
+            </Badge>
 
-                <button className="text-gray-600 hover:text-black">
-                    ↗ Share
-                </button>
+            <Badge variant="outline" className="rounded-full px-3 py-1 font-normal">
+              Adventure
+            </Badge>
+          </div>
 
-                <button className="text-gray-600 hover:text-black">
-                    🔖 Save
-                </button>
-
-            </div>
+          {/* Review text */}
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+            This book was an amazing read! The characters
+            were well-developed and the plot kept me hooked
+            from start to finish. Highly recommend to anyone
+            who loves fantasy and adventure!
+          </p>
         </div>
+      </CardContent>
 
-    );
-}   
+      {/* Actions */}
+      <CardFooter className="flex items-center justify-around gap-2 border-t px-3 py-2 sm:justify-start sm:gap-4 sm:px-4">
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="lg"
+          className="gap-1.5 px-2 text-muted-foreground hover:text-pink-500"
+        >
+          <Heart className="h-4 w-4" />
+          <span>Like</span>
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="lg"
+          className="gap-1.5 px-2 text-muted-foreground hover:text-pink-500"
+        >
+          <Share2 className="h-4 w-4" />
+          <span>Share</span>
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="lg"
+          className="gap-1.5 px-2 text-muted-foreground hover:text-pink-500"
+        >
+          <Bookmark className="h-4 w-4" />
+          <span>Save</span>
+        </Button>
+
+      </CardFooter>
+    </Card>
+  );
+}

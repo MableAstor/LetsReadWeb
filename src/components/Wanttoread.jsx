@@ -1,101 +1,96 @@
-import moreIcon from "../assets/more-icon.png";
-import binIcon from "../assets/bin.png";
-import makeasreadIcon from "../assets/approve.png";
-import wanttobuyIcon from "../assets/checklist.png";
-import khemjira from "../assets/khemjira.gif";
-import { useState } from "react";
-export default function WanttoRead() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  return (
-    <div className="bg-white rounded-lg shadow-md p-4 w-50">
-      <img
-        src={khemjira}
-        alt="Book Cover"
-        className="w-full h-55 object-cover rounded-md mb-2"
-      />
-      <h3 className="text-lg font-bold">Khemjira</h3>
-      <p className="text-gray-600 text-sm mb-2">Author : คาลิ</p>
-      <div className="flex items-center gap-1">
-        
-        <div className="inline-flex items-center border border-black rounded-full px-3 py-1">
-          
-          <p className="text-sm">Yaoi</p>
-        </div>
-        <div className="inline-flex items-center border border-black rounded-full px-3 py-1">
-          
-          <p className="text-sm">Dark</p>
-        </div>
 
-        <div className="relative ml-auto">
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-1 rounded-full hover:bg-gray-100"
+import {
+  MoreHorizontal,
+  ShoppingBag,
+  BookCheck,
+  Trash2,
+} from "lucide-react";
+
+import { BookCard } from "./BookCard";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+
+export default function WanttoRead({
+  book,
+  onMoveToWantToBuy,
+  onMarkAsRead,
+  onRemove,
+}) {
+  if (!book) return null;
+
+  return (
+    <div className="relative w-full min-w-0">
+      {/* Book Card */}
+      <BookCard book={book} hasActions />
+
+      {/* Bottom-right Menu */}
+      <div className="absolute bottom-2 right-2 z-20 sm:bottom-3 sm:right-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`จัดการหนังสือ ${book.title}`}
+            className="
+              inline-flex h-7 w-7
+              items-center justify-center
+              rounded-full border border-gray-200
+              bg-white text-gray-700
+              shadow-sm transition-colors
+              hover:bg-gray-100
+              focus-visible:outline-2
+              focus-visible:outline-ring
+              sm:h-8 sm:w-8
+            "
           >
-            
-            <img
-              src={moreIcon}
-              alt="More Options"
-              className="h-6 w-6 object-contain"
-            />
-          </button>
-          {/* Popup */}
-          {isMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 z-20 w-48 rounded-xl bg-white shadow-lg border border-gray-200 py-2">
-              
-              <button
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
-                onClick={() => {
-                  console.log("Move to Want to Buy");
-                  setIsMenuOpen(false);
-                }}
-              >
-                
-                <div className="flex items-center">
-                  <img
-                  src={wanttobuyIcon}
-                  alt="Want to Buy"
-                  className="h-4 w-4 mr-2"
-                />
-                  <p className="inline">Want to Buy</p>
-                </div>
-              </button>
-              <button
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
-                onClick={() => {
-                  console.log("Mark as Read");
-                  setIsMenuOpen(false);
-                }}
-              >
-                
-                <div className="flex items-center">
-                  <img
-                  src={makeasreadIcon}
-                  alt="Mark as Read"
-                  className="h-4 w-4 mr-2 "
-                />
-                  <p className="inline">Mark as Read</p>
-                </div>
-              </button>
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-50"
-                onClick={() => {
-                  console.log("Remove from Library");
-                  setIsMenuOpen(false);
-                }}
-              >
-                
-                <div className="flex items-center">
-                  <img
-                    src={binIcon}
-                    alt="Remove from Library"
-                    className="h-4 w-4 mr-2"
-                  />
-                  <p className="inline">Remove from Library</p>
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            align="end"
+            sideOffset={6}
+            className="z-50 w-48 rounded-xl p-1.5 shadow-lg sm:w-52"
+          >
+            <DropdownMenuItem
+              disabled={!onMoveToWantToBuy}
+              onSelect={() => onMoveToWantToBuy?.(book)}
+              className="cursor-pointer gap-2 rounded-lg px-3 py-2.5 text-xs sm:text-sm"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              Want to Buy
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              disabled={!onMarkAsRead}
+              onSelect={() => onMarkAsRead?.(book)}
+              className="cursor-pointer gap-2 rounded-lg px-3 py-2.5 text-xs sm:text-sm"
+            >
+              <BookCheck className="h-4 w-4" />
+              Mark as Read
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={!onRemove}
+              onSelect={() => onRemove?.(book)}
+              className="
+                cursor-pointer gap-2 rounded-lg
+                px-3 py-2.5 text-xs
+                text-red-600
+                focus:bg-red-50 focus:text-red-600
+                sm:text-sm
+              "
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove from Library
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

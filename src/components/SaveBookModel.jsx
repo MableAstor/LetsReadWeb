@@ -1,42 +1,86 @@
-import closeIcon from "../assets/close.png";
-import profileicon from "../assets/profile-icon.png";
+
+import { Bookmark, BookOpen } from "lucide-react";
+
 import ReviewCard from "./ReviewCard";
-export default function SaveBookModel({ onClose }) {
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+
+export default function SaveBookModel({
+  open = false,
+  onClose,
+  review,
+}) {
   return (
-    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-4xl mx-auto rounded-2xl  bg-white p-6 shadow-xl">
-        <div className="flex justify-between items-center  gap-8 mb-6 ">
-          <p className="text-xl font-bold"> Book Review Save </p>
-          <button onClick={onClose} className="cursor-pointer">
-            <img
-              src={closeIcon}
-              alt="close model book store"
-              className="w-5 h-5"
-            />
-          </button>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose?.();
+      }}
+    >
+      <DialogContent
+        className="
+          !w-[calc(100vw-2rem)]
+          !max-w-[560px]
+          max-h-[85dvh]
+          overflow-x-hidden
+          overflow-y-auto
+          rounded-2xl
+          p-4
+          sm:rounded-3xl
+          sm:p-6
+        "
+      >
+        <DialogHeader className="space-y-1">
+          <DialogTitle
+            className="
+              flex items-center gap-2
+              text-base font-bold
+              sm:text-lg
+            "
+          >
+            <Bookmark className="h-5 w-5 text-[#A36D70]" />
+            Book Review Saved
+          </DialogTitle>
+
+          <DialogDescription className="text-xs sm:text-sm">
+            รีวิวหนังสือที่คุณบันทึกจาก Feed
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-2 min-w-0">
+          {review ? (
+            <ReviewCard review={review} />
+          ) : (
+            <div
+              className="
+                flex min-h-36 flex-col
+                items-center justify-center
+                gap-2 rounded-xl
+                border border-dashed
+                border-border
+                bg-muted/30
+                px-4 py-6 text-center
+              "
+            >
+              <BookOpen className="h-7 w-7 text-muted-foreground" />
+
+              <p className="text-sm font-semibold">
+                ยังไม่มีข้อมูลรีวิว
+              </p>
+
+              <p className="text-xs text-muted-foreground">
+                กรุณาเลือกรายการรีวิวที่บันทึกจาก Feed
+              </p>
+            </div>
+          )}
         </div>
-         <div className="overflow-y-auto w-full max-w-2xl mx-auto border border-gray-300 rounded-lg border-solid bg-white p-3 gap-2">
-                    <div className="flex flex-row items-center mb-3">
-                        <img src={profileicon} alt="Profile Icon" className="h-8 w-8 mr-2" />
-                        <p className="font-bold">John Doe</p>
-                    </div>
-                    <div className="flex flex-col border border-gray-300 rounded-lg pt-3 px-2 w-full h-28">
-                        <div className="flex flex-row gap-1 items-center">
-                            <p className="font-bold">Book Title</p>
-                            <div className="text-xl text-yellow-400">
-                                ★★★★★
-                            </div>
-                            <div className="inline-flex items-center border border-black rounded-full px-3 py-1">
-                                <p className="text-sm">Fantasy</p>
-                            </div>
-                            <div className=" inline-flex items-center border border-black rounded-full px-3 py-1">
-                                <p className="text-sm">Adventure</p>
-                            </div>
-                        </div>
-                        <p className="text-sm mt-2">This book was an amazing read! The characters were well-developed and the plot kept me hooked from start to finish. Highly recommend to anyone who loves fantasy and adventure!</p>
-                    </div>
-                </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

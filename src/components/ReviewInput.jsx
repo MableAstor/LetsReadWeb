@@ -1,12 +1,25 @@
-import profileicon from "../assets/profile-icon.png";
+
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Input } from "./ui/input";
 
 export default function ReviewInput({ onClick }) {
-    return (
-        <div className=" overflow-y-auto w-full max-w-2xl mx-auto flex flex-row justify-content border border-gray-300 rounded-lg border-solid bg-white p-3 gap-2">
-            <img src={profileicon} alt="Profile Icon" className="h-8 w-8 mr-2" />
-            <div onClick={onClick} className="  border border-gray-800 rounded-lg pt-1 px-2 w-full cursor-pointer ">
-                <input type="text" placeholder="Write a review..." readOnly className="  placeholder:text-left bg-transparent border-none focus:outline-none" />
-            </div>
-        </div>
-    )
+  return (
+    <div className="mx-auto flex w-full max-w-2xl items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
+
+      <Avatar className="h-10 w-10 shrink-0">
+        <AvatarFallback className="bg-pink-100 text-pink-600">
+          J
+        </AvatarFallback>
+      </Avatar>
+
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex h-10 min-w-0 flex-1 items-center rounded-full border bg-muted/50 px-4 text-left text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Write a review...
+      </button>
+
+    </div>
+  );
 }

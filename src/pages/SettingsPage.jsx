@@ -1,561 +1,357 @@
-
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Bell, BookOpen, Check, LockKeyhole, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import SettingsLayout from "../components/SettingsLayout";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Checkbox } from "../components/ui/checkbox";
+import { Switch } from "../components/ui/switch";
+import { Separator } from "../components/ui/separator";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 
-const categories = [
-  "นิยาย",
-  "แฟนตาซี",
-  "สืบสวนสอบสวน",
-  "โรแมนซ์",
-  "ไซไฟ",
-  "พัฒนาตนเอง",
-  "จิตวิทยา",
-  "ประวัติศาสตร์",
+// Must match the categories used by CategoryCard. Keep these labels centralized later.
+const mainCategories = [
+  "รักโรแมนติก", "แฟนตาซี", "กำลังภายใน", "สืบสวนสอบสวน",
+  "ระทึกขวัญ/สยองขวัญ", "ไซไฟ/โลกอนาคต", "วาย (Yaoi / BL)",
+  "ยูริ (Yuri / GL)", "พีเรียด/ย้อนยุค", "วรรณกรรม/ชีวิต",
 ];
+const MAX_INTERESTS = 5;
+
+const pageInfo = {
+  "/settings/reading": ["การตั้งค่าการอ่าน", "เลือกหมวดหนังสือที่สนใจ เพื่อเตรียมใช้กับระบบแนะนำ"],
+  "/settings/appearance": ["ธีมและการแสดงผล", "ปรับธีมและรูปแบบตัวอักษร"],
+  "/settings/notifications": ["การแจ้งเตือน", "เลือกรูปแบบการแจ้งเตือนที่ต้องการ"],
+  "/settings/profile": ["โปรไฟล์ผู้ใช้", "แก้ไขชื่อผู้ใช้ที่แสดงใน Let's Read"],
+  "/settings/account": ["บัญชีและความปลอดภัย", "เปลี่ยนรหัสผ่านและออกจากระบบ"],
+  "/settings/about": ["เกี่ยวกับ Let's Read", "ข้อมูลเกี่ยวกับแพลตฟอร์มค้นหาและแนะนำหนังสือ"],
+};
 
 function readSaved(key, fallback) {
   try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
+    const raw = window.localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
   } catch {
     return fallback;
   }
 }
 
+function SettingRow({ icon: Icon, label, description, children }) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#F0E1DA] bg-white p-3 sm:p-4">
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon && <Icon className="mt-0.5 size-4 shrink-0 text-[#A36D70]" />}
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[#463431]">{label}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-
-  const [message, setMessage] = useState("");
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [messageError, setMessageError] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
-  const [interests, setInterests] = useState(
-    () => readSaved("letsread-interests", [])
-  );
-  const [theme, setTheme] = useState(
-    () => readSaved("letsread-theme", "light")
-  );
-  const [fontSize, setFontSize] = useState(
-    () => readSaved("letsread-font-size", "normal")
-  );
-  const [notifications, setNotifications] = useState(
-    () =>
-      readSaved("letsread-notifications", {
-        reviews: true,
-        rewards: true,
-        recommendations: true,
-      })
-  );
+  const [interests, setInterests] = useState(() => {
+    const saved = readSaved("letsread-interests", []);
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [theme, setTheme] = useState(() => readSaved("letsread-theme", "light"));
+  const [fontSize, setFontSize] = useState(() => readSaved("letsread-font-size", "normal"));
+  const [notifications, setNotifications] = useState(() => ({
+    reviews: true, rewards: true, recommendations: true,
+    ...readSaved("letsread-notifications", {}),
+  }));
+
+  const showMessage = (text, isError = false) => {
+    setMessage(text);
+    setMessageError(isError);
+  };
 
   useEffect(() => {
-    let active = true;
-
+    let mounted = true;
     supabase.auth.getUser().then(({ data, error }) => {
-      if (!active) return;
-
+      if (!mounted) return;
       if (error) {
-        console.error("Get user error:", error.message);
+        showMessage(`ไม่สามารถโหลดผู้ใช้ได้: ${error.message}`, true);
         return;
       }
-
-      setUser(data.user);
-      setUsername(
-        data.user?.user_metadata?.username ||
-        data.user?.user_metadata?.full_name ||
-        ""
-      );
+      setUser(data.user ?? null);
+      setUsername(data.user?.user_metadata?.username ?? data.user?.user_metadata?.full_name ?? "");
     });
-
-    return () => {
-      active = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
-  // ใช้ class dark ของ Tailwind หากโปรเจกต์ตั้งค่า dark mode แบบ class ไว้
+  // Persist only local UI preferences; dark classes work only on screens that support them.
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem("letsread-theme", JSON.stringify(theme));
   }, [theme]);
-
   useEffect(() => {
-    localStorage.setItem(
-      "letsread-font-size",
-      JSON.stringify(fontSize)
-    );
+    localStorage.setItem("letsread-font-size", JSON.stringify(fontSize));
   }, [fontSize]);
 
-
-const pageInfo = {
-  "/settings/reading": {
-    title: "การตั้งค่าการอ่าน",
-    description: "เลือกหมวดหนังสือที่สนใจและปรับความชอบสำหรับระบบแนะนำ",
-  },
-  "/settings/appearance": {
-    title: "ธีมและการแสดงผล",
-    description: "ปรับธีมและขนาดตัวอักษรให้เหมาะกับการอ่าน",
-  },
-  "/settings/notifications": {
-    title: "การแจ้งเตือน",
-    description: "เลือกประเภทการแจ้งเตือนที่ต้องการรับ",
-  },
-  "/settings/profile": {
-    title: "โปรไฟล์ผู้ใช้",
-    description: "จัดการชื่อผู้ใช้และข้อมูลโปรไฟล์ของคุณ",
-  },
-  "/settings/account": {
-    title: "บัญชีและความปลอดภัย",
-    description: "เปลี่ยนรหัสผ่านและออกจากระบบ",
-  },
-  "/settings/about": {
-    title: "เกี่ยวกับ Let's Read",
-    description: "ข้อมูลเกี่ยวกับเว็บไซต์และโครงการ Let's Read",
-  },
-};
-
-
-  const page = pageInfo[pathname] || pageInfo["/settings/about"];
-
   const toggleInterest = (category) => {
-    setInterests((current) =>
-      current.includes(category)
-        ? current.filter((item) => item !== category)
-        : [...current, category]
-    );
+    if (interests.includes(category)) {
+      setInterests((prev) => prev.filter((x) => x !== category));
+      setMessage("");
+      return;
+    }
+    if (interests.length >= MAX_INTERESTS) {
+      showMessage(`เลือกหมวดหลักได้สูงสุด ${MAX_INTERESTS} หมวด`, true);
+      return;
+    }
+    setInterests((prev) => [...prev, category]);
+    setMessage("");
   };
 
   const saveReading = () => {
-    localStorage.setItem(
-      "letsread-interests",
-      JSON.stringify(interests)
-    );
-    setMessage("บันทึกหมวดหนังสือที่สนใจแล้ว");
+    if (interests.length === 0) return showMessage("กรุณาเลือกอย่างน้อย 1 หมวด", true);
+    localStorage.setItem("letsread-interests", JSON.stringify(interests));
+    showMessage("บันทึกหมวดหนังสือในเบราว์เซอร์แล้ว");
   };
 
   const saveNotifications = () => {
-    localStorage.setItem(
-      "letsread-notifications",
-      JSON.stringify(notifications)
-    );
-    setMessage("บันทึกการตั้งค่าการแจ้งเตือนแล้ว");
+    localStorage.setItem("letsread-notifications", JSON.stringify(notifications));
+    showMessage("บันทึกการตั้งค่าการแจ้งเตือนในเบราว์เซอร์แล้ว");
   };
 
-  const saveProfile = async () => {
-    if (!username.trim()) {
-      setMessage("กรุณากรอกชื่อผู้ใช้");
-      return;
-    }
-
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
+    const clean = username.trim();
+    if (!clean) return showMessage("กรุณากรอกชื่อผู้ใช้", true);
     setSaving(true);
-    setMessage("");
-
-    const { data, error } = await supabase.auth.updateUser({
-      data: { username: username.trim() },
-    });
-
-    setSaving(false);
-
-    if (error) {
-      setMessage(error.message);
-      return;
+    try {
+      const { data, error } = await supabase.auth.updateUser({ data: { username: clean } });
+      if (error) throw error;
+      setUser(data.user);
+      showMessage("บันทึกชื่อผู้ใช้ในบัญชีแล้ว");
+    } catch (error) {
+      showMessage(error.message || "บันทึกไม่สำเร็จ", true);
+    } finally {
+      setSaving(false);
     }
-
-    setUser(data.user);
-    setMessage("บันทึกชื่อผู้ใช้แล้ว");
   };
 
-  const changePassword = async () => {
-    if (password.length < 6) {
-      setMessage("รหัสผ่านควรมีอย่างน้อย 6 ตัวอักษร");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setMessage("รหัสผ่านทั้งสองช่องไม่ตรงกัน");
-      return;
-    }
-
+  const changePassword = async (event) => {
+    event.preventDefault();
+    if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
+    if (password.length < 6) return showMessage("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร", true);
+    if (password !== confirmPassword) return showMessage("ยืนยันรหัสผ่านไม่ตรงกัน", true);
     setSaving(true);
-    setMessage("");
-
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
-
-    setSaving(false);
-
-    if (error) {
-      setMessage(error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPassword("");
+      setConfirmPassword("");
+      showMessage("เปลี่ยนรหัสผ่านสำเร็จ");
+    } catch (error) {
+      showMessage(error.message || "เปลี่ยนรหัสผ่านไม่สำเร็จ", true);
+    } finally {
+      setSaving(false);
     }
-
-    setPassword("");
-    setConfirmPassword("");
-    setMessage("เปลี่ยนรหัสผ่านสำเร็จ");
   };
 
   const logout = async () => {
-    const confirmed = window.confirm("ต้องการออกจากระบบหรือไม่?");
-    if (!confirmed) return;
-
     setSaving(true);
-
-    const { error } = await supabase.auth.signOut();
-
-    setSaving(false);
-
-    if (error) {
-      setMessage("ออกจากระบบไม่สำเร็จ กรุณาลองอีกครั้ง");
-      return;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setConfirmLogout(false);
+      navigate("/Login", { replace: true });
+    } catch (error) {
+      showMessage(error.message || "ออกจากระบบไม่สำเร็จ", true);
+    } finally {
+      setSaving(false);
     }
-
-    navigate("/Login", { replace: true });
   };
 
-  const toggleNotification = (key) => {
-    setNotifications((current) => ({
-      ...current,
-      [key]: !current[key],
-    }));
-    setMessage("");
-  };
+  const [title, description] = pageInfo[pathname] ?? pageInfo["/settings/about"];
 
   return (
-    <SettingsLayout
-      title={page.title}
-      description={page.description}
-    >
+    <SettingsLayout title={title} description={description}>
       {message && (
-        <p
-          role="status"
-          className="mb-5 rounded-xl bg-[#FFF0E9] p-3 text-sm text-[#925943]"
-        >
-          {message}
-        </p>
+        <Alert role="status" className={`mb-5 ${messageError ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0E1DA] bg-[#FFF8F5] text-[#925943]"}`}>
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
       )}
 
       {pathname === "/settings/reading" && (
-        <div>
-          <h2 className="mb-2 font-semibold text-gray-800">
-            หมวดหนังสือที่สนใจ
-          </h2>
-          <p className="mb-4 text-sm text-gray-500">
-            เลือกได้มากกว่าหนึ่งหมวด และเปลี่ยนแปลงภายหลังได้
-          </p>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {categories.map((category) => (
-              <label
-                key={category}
-                className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#F0E1DA] p-4 transition hover:bg-[#FFF8F5]"
-              >
-                <input
-                  type="checkbox"
-                  checked={interests.includes(category)}
-                  onChange={() => toggleInterest(category)}
-                  className="h-4 w-4 accent-[#B66D57]"
-                />
-                <span className="text-sm text-gray-700">
-                  {category}
-                </span>
-              </label>
-            ))}
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-[#352923]">หมวดหลักที่สนใจ</h2>
+              <p className="mt-1 text-xs text-muted-foreground">เลือก 1–5 หมวด ให้ตรงกับหมวดของหน้า Category</p>
+            </div>
+            <Badge variant="secondary" className="rounded-full">{interests.length}/{MAX_INTERESTS}</Badge>
           </div>
-
-          <button
-            type="button"
-            onClick={saveReading}
-            className="mt-6 rounded-xl bg-[#B66D57] px-5 py-3 font-medium text-white hover:bg-[#9D5945]"
-          >
-            บันทึกการตั้งค่า
-          </button>
-
-          <p className="mt-3 text-xs text-gray-500">
-            ขณะนี้ระบบเก็บหมวดที่เลือกไว้ในเบราว์เซอร์ก่อน
-            ยังไม่ได้เชื่อมกับคะแนนของระบบแนะนำหนังสือโดยตรง
-          </p>
-        </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {mainCategories.map((category) => {
+              const selected = interests.includes(category);
+              return (
+                <label key={category} className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${selected ? "border-[#C78E88] bg-[#FFF4F0]" : "border-[#F0E1DA] hover:bg-[#FFF9F6]"}`}>
+                  <Checkbox checked={selected} onCheckedChange={() => toggleInterest(category)} aria-label={category} />
+                  <span className="min-w-0 break-words text-[#463431]">{category}</span>
+                </label>
+              );
+            })}
+          </div>
+          <Button onClick={saveReading} className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto">บันทึกการตั้งค่า</Button>
+          <p className="text-xs leading-relaxed text-muted-foreground">ตอนนี้บันทึกใน localStorage เท่านั้น ยังไม่อัปเดต User Preference Vector หรือคะแนนแนะนำของ Backend</p>
+        </section>
       )}
 
       {pathname === "/settings/appearance" && (
-        <div className="space-y-6">
-          <div>
-            <label className="mb-3 block font-semibold text-gray-800">
-              ธีมเว็บไซต์
-            </label>
+        <section className="space-y-6">
+          <div className="space-y-3">
+            <Label className="font-semibold">ธีมเว็บไซต์</Label>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { value: "light", label: "สว่าง", icon: "☀️" },
-                { value: "dark", label: "มืด", icon: "🌙" },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setTheme(option.value)}
-                  className={`rounded-xl border p-4 text-left ${
-                    theme === option.value
-                      ? "border-[#B66D57] bg-[#FFF0E9] text-[#925943]"
-                      : "border-gray-200 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="mr-2">{option.icon}</span>
-                  {option.label}
-                </button>
+                { value: "light", label: "สว่าง", Icon: Sun },
+                { value: "dark", label: "มืด", Icon: Moon },
+              ].map(({ value, label, Icon }) => (
+                <Button key={value} type="button" variant="outline" onClick={() => setTheme(value)} aria-pressed={theme === value}
+                  className={`h-14 min-w-0 rounded-xl text-sm ${theme === value ? "border-[#B66D57] bg-[#FFF0E9] text-[#925943]" : ""}`}>
+                  <Icon className="size-4" /> {label} {theme === value && <Check className="size-4" />}
+                </Button>
               ))}
             </div>
-            <p className="mt-2 text-xs text-gray-500">
-              ธีมมืดจะทำงานได้เต็มรูปแบบเมื่อเพิ่ม dark: classes
-              ให้ส่วนต่าง ๆ ของเว็บไซต์แล้ว
-            </p>
+            <p className="text-xs text-muted-foreground">Dark mode ต้องมี dark: classes ในหน้าอื่น ๆ จึงจะเปลี่ยนทั้งเว็บได้ครบ</p>
           </div>
-
-          <div>
-            <label
-              htmlFor="font-size"
-              className="mb-3 block font-semibold text-gray-800"
-            >
-              ขนาดตัวอักษร
-            </label>
-            <select
-              id="font-size"
-              value={fontSize}
-              onChange={(event) => setFontSize(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white p-3 text-gray-800"
-            >
-              <option value="small">เล็ก</option>
-              <option value="normal">ปกติ</option>
-              <option value="large">ใหญ่</option>
-            </select>
-            <p className="mt-2 text-xs text-gray-500">
-              บันทึกตัวเลือกไว้แล้ว แต่การเปลี่ยนขนาดตัวอักษรทั้งเว็บ
-              ต้องนำค่านี้ไปใช้กับ layout เพิ่มเติม
-            </p>
+          <Separator />
+          <div className="space-y-3">
+            <Label htmlFor="font-size">ขนาดตัวอักษร</Label>
+            <Select value={fontSize} onValueChange={setFontSize}>
+              <SelectTrigger id="font-size" className="w-full max-w-xs"><SelectValue placeholder="เลือกขนาด" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="small">เล็ก</SelectItem>
+                <SelectItem value="normal">ปกติ</SelectItem>
+                <SelectItem value="large">ใหญ่</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">บันทึกขนาดตัวอักษรแล้ว แต่ต้องเชื่อมค่ากับ Layout หลักก่อนจึงจะเปลี่ยนขนาดทั่วเว็บไซต์</p>
           </div>
-        </div>
+        </section>
       )}
 
       {pathname === "/settings/notifications" && (
-        <div className="space-y-3">
+        <section className="space-y-3">
           {[
-            {
-              key: "reviews",
-              label: "รีวิวและความคิดเห็น",
-              description: "กิจกรรมเกี่ยวกับรีวิวหนังสือ",
-            },
-            {
-              key: "rewards",
-              label: "รางวัลและ EXP",
-              description: "ความสำเร็จและรางวัลจากการใช้งาน",
-            },
-            {
-              key: "recommendations",
-              label: "หนังสือแนะนำ",
-              description: "หนังสือที่อาจตรงกับความสนใจของคุณ",
-            },
-          ].map((item) => (
-            <label
-              key={item.key}
-              className="flex cursor-pointer items-center gap-4 rounded-xl border border-[#F0E1DA] p-4"
-            >
-              <span className="flex-1">
-                <span className="block font-medium text-gray-800">
-                  {item.label}
-                </span>
-                <span className="mt-1 block text-sm text-gray-500">
-                  {item.description}
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                checked={Boolean(notifications[item.key])}
-                onChange={() => toggleNotification(item.key)}
-                className="h-5 w-5 accent-[#B66D57]"
-              />
-            </label>
+            ["reviews", "รีวิวและความคิดเห็น", "กิจกรรมเกี่ยวกับรีวิวหนังสือ"],
+            ["rewards", "รางวัลและ EXP", "ความสำเร็จและรางวัลจากการใช้งาน"],
+            ["recommendations", "หนังสือแนะนำ", "หนังสือที่อาจตรงกับความสนใจของคุณ"],
+          ].map(([key, label, detail]) => (
+            <SettingRow key={key} icon={Bell} label={label} description={detail}>
+              <Switch checked={Boolean(notifications[key])} onCheckedChange={(checked) => setNotifications((prev) => ({ ...prev, [key]: checked }))} aria-label={label} />
+            </SettingRow>
           ))}
-
-          <button
-            type="button"
-            onClick={saveNotifications}
-            className="mt-3 rounded-xl bg-[#B66D57] px-5 py-3 font-medium text-white hover:bg-[#9D5945]"
-          >
-            บันทึกการตั้งค่า
-          </button>
-
-          <p className="text-xs text-gray-500">
-            ตัวเลือกนี้เก็บการตั้งค่าไว้ในเบราว์เซอร์
-            ยังไม่ได้เชื่อมระบบส่งการแจ้งเตือนจริง
-          </p>
-        </div>
+          <Button onClick={saveNotifications} className="mt-3 w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto">บันทึกการตั้งค่า</Button>
+          <p className="text-xs text-muted-foreground">บันทึกความต้องการในเบราว์เซอร์เท่านั้น ยังไม่เชื่อมการส่งแจ้งเตือนจริง</p>
+        </section>
       )}
 
-      
-{pathname === "/settings/profile" && (
-  <section>
-    <div className="mb-6 flex items-center gap-4 rounded-2xl bg-[#FFF8F5] p-5">
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#F3D5C9] text-[#865B4D]">
-        <span className="text-2xl font-bold">
-          {(username || user?.email || "U")
-            .charAt(0)
-            .toUpperCase()}
-        </span>
-      </div>
-
-      <div className="min-w-0">
-        <h2 className="break-words text-lg font-bold text-[#352923]">
-          {username || "นักอ่าน"}
-        </h2>
-        <p className="break-all text-sm text-gray-500">
-          {user?.email || "กำลังโหลดข้อมูล..."}
-        </p>
-      </div>
-    </div>
-
-    <label
-      htmlFor="profile-username"
-      className="mb-2 block text-sm font-medium text-gray-700"
-    >
-      ชื่อผู้ใช้
-    </label>
-
-    <input
-      id="profile-username"
-      type="text"
-      value={username}
-      onChange={(event) => {
-        setUsername(event.target.value);
-        setMessage("");
-      }}
-      maxLength={40}
-      placeholder="กรอกชื่อผู้ใช้"
-      className="w-full rounded-xl border border-gray-200 p-3 outline-none focus:border-[#B66D57]"
-    />
-
-    <p className="mt-2 text-xs text-gray-500">
-      ชื่อนี้จะแสดงบนโปรไฟล์ของคุณ
-    </p>
-
-    <button
-      type="button"
-      onClick={saveProfile}
-      disabled={saving}
-      className="mt-5 rounded-xl bg-[#B66D57] px-5 py-3 font-medium text-white transition hover:bg-[#9D5945] disabled:opacity-60"
-    >
-      {saving ? "กำลังบันทึก..." : "บันทึกโปรไฟล์"}
-    </button>
-  </section>
-)}
-
+      {pathname === "/settings/profile" && (
+        <section className="space-y-5">
+          <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-[#FFF8F5] p-4 sm:p-5">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-[#F3D5C9] text-xl font-bold text-[#865B4D] sm:size-16">
+              {(username || user?.email || "U").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="break-words font-bold text-[#352923]">{username || "นักอ่าน"}</p>
+              <p className="mt-1 break-all text-xs text-muted-foreground">{user?.email || "ยังไม่พบข้อมูลบัญชี"}</p>
+            </div>
+          </div>
+          <form onSubmit={saveProfile} className="space-y-3">
+            <Label htmlFor="profile-username">ชื่อผู้ใช้</Label>
+            <Input id="profile-username" maxLength={40} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="กรอกชื่อผู้ใช้" className="h-11 rounded-xl" />
+            <p className="text-xs text-muted-foreground">แก้ไขชื่อผู้ใช้ใน Supabase Auth user_metadata</p>
+            <Button type="submit" disabled={saving || !user} className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto">{saving ? "กำลังบันทึก..." : "บันทึกโปรไฟล์"}</Button>
+          </form>
+        </section>
+      )}
 
       {pathname === "/settings/account" && (
-        <div className="space-y-8">
-          <section>
-            <h2 className="mb-4 font-semibold text-gray-800">
-              เปลี่ยนรหัสผ่าน
-            </h2>
-
-            <label
-              htmlFor="new-password"
-              className="mb-2 block text-sm text-gray-600"
-            >
-              รหัสผ่านใหม่
-            </label>
-            <input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mb-4 w-full rounded-xl border border-gray-200 p-3 outline-none focus:border-[#B66D57]"
-              placeholder="อย่างน้อย 6 ตัวอักษร"
-            />
-
-            <label
-              htmlFor="confirm-password"
-              className="mb-2 block text-sm text-gray-600"
-            >
-              ยืนยันรหัสผ่านใหม่
-            </label>
-            <input
-              id="confirm-password"
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 p-3 outline-none focus:border-[#B66D57]"
-              placeholder="กรอกรหัสผ่านอีกครั้ง"
-            />
-
-            <button
-              type="button"
-              onClick={changePassword}
-              disabled={saving}
-              className="mt-4 rounded-xl border border-[#B66D57] px-5 py-3 font-medium text-[#A35E49] hover:bg-[#FFF8F5] disabled:opacity-60"
-            >
-              เปลี่ยนรหัสผ่าน
-            </button>
+        <div className="space-y-7">
+          <form onSubmit={changePassword} className="space-y-4">
+            <div className="flex items-center gap-2"><LockKeyhole className="size-4 text-[#A36D70]" /><h2 className="font-semibold">เปลี่ยนรหัสผ่าน</h2></div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">รหัสผ่านใหม่</Label>
+              <Input id="new-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="อย่างน้อย 6 ตัวอักษร" className="h-11 rounded-xl" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">ยืนยันรหัสผ่านใหม่</Label>
+              <Input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="h-11 rounded-xl" />
+            </div>
+            <Button type="submit" variant="outline" disabled={saving || !user} className="w-full rounded-xl border-[#B66D57] text-[#A35E49] sm:w-auto">เปลี่ยนรหัสผ่าน</Button>
+            <p className="text-xs text-muted-foreground">การเปลี่ยนรหัสผ่านใช้ Supabase Auth; บัญชี OAuth อาจมีวิธีจัดการต่างกัน</p>
+          </form>
+          <Separator />
+          <section className="space-y-3">
+            <div className="flex items-center gap-2"><LogOut className="size-4 text-red-600" /><h2 className="font-semibold">ออกจากระบบ</h2></div>
+            <p className="text-xs leading-relaxed text-muted-foreground">คุณจะต้องเข้าสู่ระบบอีกครั้งเพื่อใช้งานหน้าที่จำเป็นต้องมีบัญชี</p>
+            <Button variant="outline" onClick={() => setConfirmLogout(true)} disabled={saving} className="w-full rounded-xl border-red-200 text-red-600 hover:bg-red-50 sm:w-auto">ออกจากระบบ</Button>
           </section>
-
-          <hr className="border-gray-100" />
-
-          <section>
-            <h2 className="font-semibold text-gray-800">
-              ออกจากระบบ
-            </h2>
-            <p className="mt-2 text-sm text-gray-500">
-              คุณจะต้องเข้าสู่ระบบอีกครั้งเพื่อใช้งานหน้าที่ต้อง Login
-            </p>
-
-            <button
-              type="button"
-              onClick={logout}
-              disabled={saving}
-              className="mt-4 rounded-xl border border-red-200 px-5 py-3 font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-            >
-              {saving ? "กำลังดำเนินการ..." : "ออกจากระบบ"}
-            </button>
-          </section>
+          <AlertDialog open={confirmLogout} onOpenChange={setConfirmLogout}>
+            <AlertDialogContent className="!w-[calc(100vw-2rem)] !max-w-sm rounded-2xl">
+              <AlertDialogHeader>
+                <AlertDialogTitle>ยืนยันการออกจากระบบ</AlertDialogTitle>
+                <AlertDialogDescription>คุณต้องการออกจากบัญชี Let's Read ใช่หรือไม่?</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={saving}>ยกเลิก</AlertDialogCancel>
+                <AlertDialogAction disabled={saving} onClick={(event) => { event.preventDefault(); logout(); }} className="bg-red-600 text-white hover:bg-red-700">ยืนยันออกจากระบบ</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 
       {pathname === "/settings/about" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-4 rounded-2xl bg-[#FFF8F5] p-5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F3D5C9] text-[#865B4D]">
-              <span className="text-xl font-bold">LR</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-[#352923]">
-                Let's Read
-              </h2>
-              <p className="text-sm text-gray-500">
-                Discover your next favorite book
-              </p>
+        <section className="space-y-4">
+          <div className="flex items-center gap-4 rounded-2xl bg-[#FFF8F5] p-4 sm:p-5">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#F3D5C9] font-bold text-[#865B4D]">LR</div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-[#352923]">Let's Read</h2>
+              <p className="text-xs text-muted-foreground">Discover your next favorite book</p>
             </div>
           </div>
-
-          <div className="rounded-xl border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">เวอร์ชัน</p>
-            <p className="mt-1 font-medium text-gray-800">
-              1.0.0 (เวอร์ชันโครงการ)
-            </p>
+          <SettingRow icon={BookOpen} label="เวอร์ชัน" description="เวอร์ชันโครงการ"><Badge variant="secondary">1.0.0</Badge></SettingRow>
+          <div className="rounded-xl border border-[#F0E1DA] p-4">
+            <h3 className="text-sm font-semibold text-[#352923]">เกี่ยวกับโครงการ</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Let's Read เป็นแพลตฟอร์มค้นหาและแนะนำหนังสือส่วนบุคคล พร้อม Feed รีวิว, Swipe, Library และ Leaderboard</p>
           </div>
-
-          <div className="rounded-xl border border-gray-100 p-4">
-            <p className="font-medium text-gray-800">
-              เกี่ยวกับโครงการ
-            </p>
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              Let's Read เป็นเว็บไซต์สำหรับค้นหาหนังสือ
-              สำรวจหนังสือที่น่าสนใจ และแบ่งปันรีวิวกับชุมชนนักอ่าน
-            </p>
-          </div>
-        </div>
+        </section>
       )}
     </SettingsLayout>
   );
