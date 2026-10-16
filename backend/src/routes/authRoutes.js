@@ -1,366 +1,318 @@
-
 import express from "express";
-import {
-  supabase,
-  supabaseAdmin,
-} from "../config/supabase.js";
+import { supabase, supabaseAdmin } from "../config/supabase.js";
 
 const router = express.Router();
 
-// ========================================
-// LOGIN
-// เข้าสู่ระบบและตรวจสอบโปรไฟล์ใน User_Test
-// ========================================
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  // 1. ตรวจสอบข้อมูล
-  if (!email || !password) {
-    return res.status(400).json({
-      message: "กรุณากรอกอีเมลและรหัสผ่าน",
-    });
+// ======================================================
+// HELPER: GET OR CREATE USER PROFILE
+// เชื่อม Supabase Auth กับตาราง User ด้วย auth_user_id
+// ======================================================
+async function getOrCreateUserProfile(authUser) {
+  if (!authUser?.id) {
+    throw new Error("ไม่พบข้อมูลผู้ใช้จาก Supabase Auth");
   }
 
+  const email = authUser.email;
+
+  const metadataName =
+    authUser.user_metadata?.User_Name ||
+    authUser.user_metadata?.username ||
+    authUser.user_metadata?.full_name ||
+    authUser.user_metadata?.name ||
+    (email ? email.split("@")[0] : "User");
+
+  // ค้นหาผู้ใช้ด้วย Auth UUID
+  const { data: existingUser, error: findError } = await supabaseAdmin
+    .from("User")
+    .select("UserID, auth_user_id, User_Name, User_Email")
+    .eq("auth_user_id", authUser.id)
+    .maybeSingle();
+
+  if (findError) {
+    throw findError;
+  }
+
+  if (existingUser) {
+    // อัปเดตอีเมลเมื่อมีการเปลี่ยนแปลง
+    const { data: updatedUser, error: updateError } =
+      await supabaseAdmin
+        .from("User")
+        .update({
+          User_Email: email || existingUser.User_Email,
+        })
+        .eq("UserID", existingUser.UserID)
+        .select("UserID, auth_user_id, User_Name, User_Email")
+        .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return updatedUser;
+  }
+
+  // ตรวจสอบว่ามีผู้ใช้เดิมที่ใช้อีเมลนี้หรือไม่
+  const { data: emailUser, error: emailError } = await supabaseAdmin
+    .from("User")
+    .select("UserID, auth_user_id, User_Name, User_Email")
+    .eq("User_Email", email)
+    .maybeSingle();
+
+  if (emailError) {
+    throw emailError;
+  }
+
+  if (emailUser) {
+    // ผูก Auth UUID กับผู้ใช้เดิม
+    const { data: linkedUser, error: linkError } =
+      await supabaseAdmin
+        .from("User")
+        .update({
+          auth_user_id: authUser.id,
+        })
+        .eq("UserID", emailUser.UserID)
+        .select("UserID, auth_user_id, User_Name, User_Email")
+        .single();
+
+    if (linkError) {
+      throw linkError;
+    }
+
+    return linkedUser;
+  }
+
+  // สร้างโปรไฟล์ผู้ใช้ใหม่
+  // ไม่บันทึกรหัสผ่านจาก Supabase Auth ลง User_password
+  const { data: newUser, error: insertError } = await supabaseAdmin
+    .from("User")
+    .insert({
+      auth_user_id: authUser.id,
+      User_Name: metadataName,
+      User_Email: email,
+    })
+    .select("UserID, auth_user_id, User_Name, User_Email")
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return newUser;
+}
+
+// ======================================================
+// LOGIN
+// ======================================================
+router.post("/login", async (req, res) => {
   try {
-    // 2. เข้าสู่ระบบผ่าน Supabase Auth
-    const { data, error } =
-      await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "กรุณากรอกอีเมลและรหัสผ่าน",
       });
+    }
+
+    // เข้าสู่ระบบด้วย Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) {
       return res.status(401).json({
+        success: false,
         message: error.message,
       });
     }
 
-    const authUser = data.user;
+    // เชื่อมบัญชี Auth กับตาราง User
+    const userProfile = await getOrCreateUserProfile(data.user);
 
-    // 3. ค้นหาโปรไฟล์ใน User_Test ด้วย auth_user_id
-    const {
-      data: existingProfile,
-      error: findError,
-    } = await supabaseAdmin
-      .from("User_Test")
-      .select("UserID, auth_user_id, User_Name, User_Email")
-      .eq("auth_user_id", authUser.id)
-      .maybeSingle();
-
-    if (findError) {
-      console.error(
-        "Find User_Test error:",
-        findError.message
-      );
-
-      return res.status(500).json({
-        message: "ไม่สามารถตรวจสอบโปรไฟล์ทดลองได้",
-      });
-    }
-
-    let profile = existingProfile;
-
-    // 4. ถ้าไม่มีโปรไฟล์ ให้สร้างใน User_Test
-    if (!profile) {
-      const username =
-        authUser.user_metadata?.username ||
-        authUser.email?.split("@")[0] ||
-        "User";
-
-      const {
-        data: newProfile,
-        error: insertError,
-      } = await supabaseAdmin
-        .from("User_Test")
-        .insert({
-          auth_user_id: authUser.id,
-          User_Name: username,
-          User_Email: authUser.email ?? email.trim(),
-        })
-        .select("UserID, auth_user_id, User_Name, User_Email")
-        .single();
-
-      if (insertError) {
-        console.error(
-          "Create User_Test profile error:",
-          insertError.message
-        );
-
-        return res.status(500).json({
-          message:
-            "เข้าสู่ระบบสำเร็จ แต่สร้างโปรไฟล์ทดลองไม่สำเร็จ",
-        });
-      }
-
-      profile = newProfile;
-    }
-
-    // 5. ส่งข้อมูลกลับ Frontend
     return res.status(200).json({
+      success: true,
       message: "เข้าสู่ระบบสำเร็จ",
-      user: authUser,
       session: data.session,
-      profile: {
-        UserID: profile.UserID,
-        User_Name: profile.User_Name,
-        User_Email: profile.User_Email,
-      },
+      user: userProfile,
     });
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("[LOGIN] Error:", error);
 
     return res.status(500).json({
+      success: false,
       message: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
+      error: error.message,
     });
   }
 });
 
-// ========================================
-// REGISTER - TEST
-// สมัครสมาชิกและบันทึกลง User_Test
-// ========================================
+// ======================================================
+// REGISTER
+// ======================================================
 router.post("/register", async (req, res) => {
-  const {
-    email,
-    username,
-    password,
-    confirmPassword,
-  } = req.body;
-
-  // 1. ตรวจสอบข้อมูล
-  if (
-    !email ||
-    !username ||
-    !password ||
-    !confirmPassword
-  ) {
-    return res.status(400).json({
-      message: "กรุณากรอกข้อมูลให้ครบ",
-    });
-  }
-
-  const cleanEmail = email.trim();
-  const cleanUsername = username.trim();
-
-  if (!cleanUsername) {
-    return res.status(400).json({
-      message: "กรุณากรอกชื่อผู้ใช้",
-    });
-  }
-
-  // 2. ตรวจสอบรหัสผ่าน
-  if (password !== confirmPassword) {
-    return res.status(400).json({
-      message: "รหัสผ่านไม่ตรงกัน",
-    });
-  }
-
   try {
-    // 3. สร้างบัญชีผ่าน Supabase Auth
-    const {
-      data,
-      error: authError,
-    } = await supabase.auth.signUp({
-      email: cleanEmail,
+    const { email, username, password, confirmPassword } = req.body;
+
+    if (!email || !username || !password || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "กรุณากรอกข้อมูลให้ครบทุกช่อง",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน",
+      });
+    }
+
+    // สมัครสมาชิกผ่าน Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email,
       password,
       options: {
         data: {
-          username: cleanUsername,
+          User_Name: username,
+          username,
         },
       },
     });
 
-    if (authError) {
-      console.error(
-        "Auth register error:",
-        authError.message
-      );
-
+    if (error) {
       return res.status(400).json({
-        message: authError.message,
+        success: false,
+        message: error.message,
       });
     }
 
-    if (!data.user) {
-      return res.status(400).json({
-        message: "ไม่สามารถสร้างบัญชีผู้ใช้ได้",
+    // เมื่อ Supabase คืนข้อมูล Auth user มา ให้สร้างโปรไฟล์
+    if (data.user) {
+      const userProfile = await getOrCreateUserProfile({
+        ...data.user,
+        email: data.user.email || email,
+        user_metadata: {
+          ...data.user.user_metadata,
+          User_Name: username,
+          username,
+        },
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: data.session
+          ? "สมัครสมาชิกสำเร็จ"
+          : "สมัครสมาชิกสำเร็จ กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี",
+        user: userProfile,
+        session: data.session,
       });
     }
 
-    // 4. ตรวจสอบว่ามีโปรไฟล์นี้ใน User_Test แล้วหรือยัง
-    const {
-      data: existingProfile,
-      error: findError,
-    } = await supabaseAdmin
-      .from("User_Test")
-      .select("UserID, auth_user_id, User_Name, User_Email")
-      .eq("auth_user_id", data.user.id)
-      .maybeSingle();
-
-    if (findError) {
-      console.error(
-        "Find User_Test during register error:",
-        findError.message
-      );
-
-      return res.status(500).json({
-        message:
-          "สร้างบัญชี Auth แล้ว แต่ตรวจสอบโปรไฟล์ทดลองไม่สำเร็จ",
-      });
-    }
-
-    let profile = existingProfile;
-
-    // 5. ถ้ายังไม่มี ให้สร้างโปรไฟล์ทดลอง
-    if (!profile) {
-      const {
-        data: newProfile,
-        error: insertError,
-      } = await supabaseAdmin
-        .from("User_Test")
-        .insert({
-          auth_user_id: data.user.id,
-          User_Name: cleanUsername,
-          User_Email: data.user.email ?? cleanEmail,
-        })
-        .select("UserID, auth_user_id, User_Name, User_Email")
-        .single();
-
-      if (insertError) {
-        console.error(
-          "User_Test insert error:",
-          insertError.message
-        );
-
-        return res.status(500).json({
-          message:
-            "สร้างบัญชี Auth แล้ว แต่บันทึกโปรไฟล์ทดลองไม่สำเร็จ",
-        });
-      }
-
-      profile = newProfile;
-    }
-
-    // 6. ส่งผลลัพธ์กลับ Frontend
     return res.status(201).json({
-      message: "สมัครสมาชิกทดลองสำเร็จ",
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-      },
-      profile: {
-        UserID: profile.UserID,
-        User_Name: profile.User_Name,
-        User_Email: profile.User_Email,
-      },
+      success: true,
+      message: "สมัครสมาชิกสำเร็จ กรุณาตรวจสอบอีเมล",
     });
   } catch (error) {
-    console.error("Register test error:", error);
+    console.error("[REGISTER] Error:", error);
 
     return res.status(500).json({
-      message: "เกิดข้อผิดพลาดในการสมัครสมาชิกทดลอง",
+      success: false,
+      message: "เกิดข้อผิดพลาดในการสมัครสมาชิก",
+      error: error.message,
     });
   }
 });
 
-/* ========================================
-   GET REVIEWS FOR FEED
-   ดึงรีวิว ชื่อผู้รีวิว และ URL รูปภาพ
-======================================== */
+// ======================================================
+// GET REVIEWS
+// ดึงรีวิวจาก Reviews และชื่อผู้รีวิวจาก User
+// ======================================================
 router.get("/reviews/test", async (req, res) => {
   try {
-    const { data: reviews, error } = await supabaseAdmin
-      .from("Reviews_Test")
-      .select(
-        "ReviewsID, auth_user_id, Book_Title, Main_Category, Sub_Category, Review_Text, Rating, Image_URL, Created_At"
-      )
+    const { data: reviews, error: reviewsError } = await supabaseAdmin
+      .from("Reviews")
+      .select(`
+        ReviewsID,
+        UserID,
+        BooksID,
+        Book_Title,
+        Main_Category,
+        Sub_Category,
+        Review_Text,
+        Rating,
+        Image_URL,
+        Created_At
+      `)
       .order("Created_At", { ascending: false });
 
-    if (error) {
-      console.error("[REVIEW] Load reviews error:", error.message);
+    if (reviewsError) {
+      throw reviewsError;
+    }
 
-      return res.status(500).json({
-        message: "โหลดรีวิวไม่สำเร็จ",
+    // หากยังไม่มีรีวิว ให้คืนอาร์เรย์ว่าง
+    if (!reviews || reviews.length === 0) {
+      return res.status(200).json({
+        success: true,
+        reviews: [],
       });
     }
 
+    // ดึง UserID ที่ไม่ซ้ำกัน
     const userIds = [
       ...new Set(
-        (reviews ?? []).map((review) => review.auth_user_id)
+        reviews
+          .map((review) => review.UserID)
+          .filter((id) => id !== null && id !== undefined)
       ),
     ];
 
-    let profileMap = new Map();
+    let users = [];
 
     if (userIds.length > 0) {
-      const { data: profiles, error: profileError } =
-        await supabaseAdmin
-          .from("User_Test")
-          .select("auth_user_id, User_Name")
-          .in("auth_user_id", userIds);
+      const { data, error: usersError } = await supabaseAdmin
+        .from("User")
+        .select("UserID, User_Name")
+        .in("UserID", userIds);
 
-      if (profileError) {
-        console.error(
-          "[REVIEW] Load reviewer names error:",
-          profileError.message
-        );
-      } else {
-        profileMap = new Map(
-          (profiles ?? []).map((profile) => [
-            profile.auth_user_id,
-            profile.User_Name,
-          ])
-        );
+      if (usersError) {
+        throw usersError;
       }
+
+      users = data || [];
     }
 
-    const feedReviews = (reviews ?? []).map((review) => ({
+    // จับคู่รีวิวกับชื่อผู้ใช้
+    const userMap = new Map(
+      users.map((user) => [String(user.UserID), user.User_Name])
+    );
+
+    const formattedReviews = reviews.map((review) => ({
       ...review,
-      User_Name:
-        profileMap.get(review.auth_user_id) || "Reader",
+      User_Name: userMap.get(String(review.UserID)) || "ผู้ใช้",
     }));
 
-    return res.json({ reviews: feedReviews });
+    return res.status(200).json({
+      success: true,
+      reviews: formattedReviews,
+    });
   } catch (error) {
-    console.error("[REVIEW] Feed error:", error);
+    console.error("[REVIEW] Fetch error:", error);
 
     return res.status(500).json({
-      message: "เกิดข้อผิดพลาดขณะโหลด Feed",
+      success: false,
+      message: "ไม่สามารถดึงรีวิวได้",
+      error: error.message,
     });
   }
 });
 
-/* ========================================
-   POST REVIEW
-   รับชื่อหนังสือที่ผู้ใช้พิมพ์เอง
-   และบันทึก URL รูปภาพลง Reviews_Test
-======================================== */
+// ======================================================
+// POST REVIEW
+// บันทึกรีวิวลง Reviews โดยใช้ UserID จากตาราง User
+// ======================================================
 router.post("/reviews/test", async (req, res) => {
   try {
-    // 1. ตรวจสอบ Access Token
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({
-        message: "กรุณาเข้าสู่ระบบก่อนเขียนรีวิว",
-      });
-    }
-
-    const accessToken = authHeader.slice(7);
-
-    // 2. ตรวจสอบผู้ใช้กับ Supabase Auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(accessToken);
-
-    if (authError || !user) {
-      return res.status(401).json({
-        message: "กรุณาเข้าสู่ระบบใหม่",
-      });
-    }
-
-    // 3. รับข้อมูลจากฟอร์ม
     const {
       bookName,
       mainCategory,
@@ -370,178 +322,149 @@ router.post("/reviews/test", async (req, res) => {
       imageUrl,
     } = req.body;
 
-    const cleanBookName = String(bookName ?? "").trim();
-    const cleanReview = String(reviewText ?? "").trim();
-    const ratingNumber = Number(rating);
+    // ตรวจสอบ Access Token
+    const authHeader = req.headers.authorization;
 
-    if (!cleanBookName) {
-      return res.status(400).json({
-        message: "กรุณากรอกชื่อหนังสือ",
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบก่อนเขียนรีวิว",
       });
     }
+
+    const accessToken = authHeader.split(" ")[1];
+
+    // ตรวจสอบบัญชีผู้ใช้จาก Token
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser(accessToken);
+
+    if (authError || !authData?.user) {
+      return res.status(401).json({
+        success: false,
+        message: "เซสชันหมดอายุหรือไม่สามารถยืนยันตัวตนได้",
+      });
+    }
+
+    if (!bookName || !mainCategory || !subCategory || !reviewText) {
+      return res.status(400).json({
+        success: false,
+        message: "กรุณากรอกชื่อหนังสือ หมวดหมู่ และข้อความรีวิว",
+      });
+    }
+
+    const numericRating = Number(rating);
 
     if (
-      !Number.isInteger(ratingNumber) ||
-      ratingNumber < 1 ||
-      ratingNumber > 5
+      !Number.isFinite(numericRating) ||
+      numericRating < 1 ||
+      numericRating > 5
     ) {
       return res.status(400).json({
-        message: "กรุณาเลือกคะแนน 1–5 ดาว",
+        success: false,
+        message: "คะแนนรีวิวต้องอยู่ระหว่าง 1 ถึง 5",
       });
     }
 
-    if (!cleanReview) {
-      return res.status(400).json({
-        message: "กรุณาเขียนข้อความรีวิว",
-      });
+    // ค้นหาหรือสร้างโปรไฟล์ใน User
+    const userProfile = await getOrCreateUserProfile(authData.user);
+
+    // บันทึกรีวิวโดยใช้ UserID ซึ่งเป็น FK ของตาราง User
+    const { data: newReview, error: reviewError } = await supabaseAdmin
+      .from("Reviews")
+      .insert({
+        UserID: userProfile.UserID,
+        BooksID: null,
+        Book_Title: bookName,
+        Main_Category: mainCategory,
+        Sub_Category: subCategory,
+        Review_Text: reviewText,
+        Rating: numericRating,
+        Image_URL: imageUrl || null,
+      })
+      .select(`
+        ReviewsID,
+        UserID,
+        BooksID,
+        Book_Title,
+        Main_Category,
+        Sub_Category,
+        Review_Text,
+        Rating,
+        Image_URL,
+        Created_At
+      `)
+      .single();
+
+    if (reviewError) {
+      throw reviewError;
     }
-
-    // 4. บันทึกลง Reviews_Test
-    const { data: review, error: insertError } =
-      await supabaseAdmin
-        .from("Reviews_Test")
-        .insert({
-          auth_user_id: user.id,
-          BooksID: null,
-          Book_Title: cleanBookName,
-          Main_Category:
-            String(mainCategory ?? "").trim() || null,
-          Sub_Category:
-            String(subCategory ?? "").trim() || null,
-          Review_Text: cleanReview,
-          Rating: ratingNumber,
-          Image_URL: imageUrl || null,
-        })
-        .select(
-          "ReviewsID, auth_user_id, Book_Title, Main_Category, Sub_Category, Review_Text, Rating, Image_URL, Created_At"
-        )
-        .single();
-
-    if (insertError) {
-      console.error(
-        "[REVIEW] Save error:",
-        insertError.message
-      );
-
-      return res.status(500).json({
-        message: "บันทึกรีวิวไม่สำเร็จ",
-        error: insertError.message,
-      });
-    }
-
-    console.log("[REVIEW] Saved:", review.ReviewsID);
 
     return res.status(201).json({
+      success: true,
       message: "บันทึกรีวิวสำเร็จ",
-      review,
+      review: {
+        ...newReview,
+        User_Name: userProfile.User_Name,
+      },
     });
   } catch (error) {
-    console.error("[REVIEW] Unexpected error:", error);
+    console.error("[REVIEW] Save error:", error);
 
     return res.status(500).json({
-      message: "เกิดข้อผิดพลาดขณะบันทึกรีวิว",
+      success: false,
+      message: "ไม่สามารถบันทึกรีวิวได้",
+      error: error.message,
     });
   }
 });
 
-// ========================================
-// SYNC PROFILE - GOOGLE / SOCIAL LOGIN
-// บันทึกข้อมูลผู้ใช้ลง User_Test หลัง OAuth Login
-// ========================================
+// ======================================================
+// SYNC PROFILE
+// ซิงก์โปรไฟล์หลัง OAuth เช่น Google
+// ======================================================
 router.post("/sync-profile", async (req, res) => {
   try {
-    // 1. รับ Access Token จาก Frontend
     const authHeader = req.headers.authorization;
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
+        success: false,
         message: "ไม่พบ Access Token",
       });
     }
 
-    const accessToken = authHeader.slice(7);
+    const accessToken = authHeader.split(" ")[1];
 
-    // 2. ตรวจสอบตัวตนผู้ใช้กับ Supabase Auth
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(accessToken);
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser(accessToken);
 
-    if (authError || !user) {
-      console.error(
-        "[SYNC PROFILE] Auth error:",
-        authError?.message
-      );
-
+    if (authError || !authData?.user) {
       return res.status(401).json({
-        message: "ไม่สามารถยืนยันตัวตนผู้ใช้ได้",
+        success: false,
+        message: "ไม่สามารถยืนยันตัวตนได้",
       });
     }
 
-    // 3. ตรวจสอบอีเมล
-    if (!user.email) {
-      return res.status(400).json({
-        message: "บัญชีนี้ไม่มีอีเมล",
-      });
-    }
+    const userProfile = await getOrCreateUserProfile(authData.user);
 
-    // 4. ดึงชื่อจากข้อมูลบัญชี
-    const username =
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.user_metadata?.username ||
-      user.email.split("@")[0];
-
-    // 5. เพิ่มหรืออัปเดตข้อมูลใน User_Test
-    const {
-      data: profile,
-      error: profileError,
-    } = await supabaseAdmin
-      .from("User_Test")
-      .upsert(
-        {
-          auth_user_id: user.id,
-          User_Name: username,
-          User_Email: user.email,
-        },
-        {
-          onConflict: "auth_user_id",
-        }
-      )
-      .select(
-        "UserID, auth_user_id, User_Name, User_Email"
-      )
-      .single();
-
-    if (profileError) {
-      console.error(
-        "[SYNC PROFILE] Database error:",
-        profileError.message
-      );
-
-      return res.status(500).json({
-        message: "บันทึกข้อมูลใน User_Test ไม่สำเร็จ",
-        error: profileError.message,
-      });
-    }
-
-    console.log(
-      "[SYNC PROFILE] Success:",
-      profile.User_Email
-    );
-
-    // 6. ส่งข้อมูลกลับ Frontend
     return res.status(200).json({
-      message: "ซิงก์ข้อมูลผู้ใช้สำเร็จ",
-      profile,
+      success: true,
+      message: "ซิงก์โปรไฟล์สำเร็จ",
+      user: userProfile,
     });
   } catch (error) {
     console.error("[SYNC PROFILE] Error:", error);
 
     return res.status(500).json({
-      message: "เกิดข้อผิดพลาดในการซิงก์ข้อมูลผู้ใช้",
+      success: false,
+      message: "ไม่สามารถซิงก์โปรไฟล์ได้",
+      error: error.message,
     });
   }
 });
 
+// ======================================================
+// EXPORT ROUTER
+// ต้องมี export default เพียงครั้งเดียว
+// ======================================================
 export default router;

@@ -314,13 +314,16 @@ export default function WriteReviewModal({
                     }
                     className="border border-gray-950 rounded-xl w-full h-10 px-2"
                   >
-                    <option value="">
+                   <option value="">
                       Select category...
-                    </option>
-                    <option value="Fiction">Fiction</option>
-                    <option value="Romance">Romance</option>
-                    <option value="Fantasy">Fantasy</option>
-                    <option value="Mystery">Mystery</option>
+                      </option>
+                      <option value="Mystery">Mystery</option>
+                      <option value="Fantasy">Fantasy</option>
+                      <option value="Horror">Horror</option>
+                      <option value="Historical Fiction">Historical Fiction</option>
+                      <option value="Yaoi">Yaoi</option>
+                      <option value="Yuri">Yuri</option>
+                      <option value="Romance">Romance</option>
                   </select>
                 </div>
               </div>
