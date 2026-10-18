@@ -16,7 +16,6 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SettingsPage from "./pages/SettingsPage";
 import { BottomBar } from "./components/Bottombar";
-import PreviewUI from "./pages/PreviewUI";
 import ViralBooksPage from "./pages/ViralBooksPage";
 import Top100Page from "./pages/Top100Page";
 export default function App() {
@@ -185,7 +184,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/preview-ui" element={<PreviewUI />} />
           <Route path="/viral-books" element={<ViralBooksPage />} />
       <Route path="/top-100" element={<Top100Page />} />
         </Routes>
