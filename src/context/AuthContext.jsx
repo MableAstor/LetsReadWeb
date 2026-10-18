@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useContext,
@@ -6,6 +7,11 @@ import {
 } from "react";
 
 import { supabase } from "../lib/supabase";
+
+// URL ของ Backend จาก Vercel Environment Variables
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
 
 const AuthContext = createContext(null);
 
@@ -36,13 +42,10 @@ export function AuthProvider({ children }) {
       }
     );
 
-    // ตรวจสอบ Session ที่มีอยู่แล้ว
     const loadSession = async () => {
       try {
-        const {
-          data,
-          error,
-        } = await supabase.auth.getSession();
+        const { data, error } =
+          await supabase.auth.getSession();
 
         if (!mounted) return;
 
@@ -88,15 +91,16 @@ export function AuthProvider({ children }) {
 
   // ========================================
   // 2. ซิงก์ข้อมูลผู้ใช้ไปยัง Backend
-  // รองรับ Google / Facebook / LINE / Email
+  // รองรับ OAuth และ Email
   // ========================================
   useEffect(() => {
     const accessToken = session?.access_token;
 
-    // ยังไม่ได้เข้าสู่ระบบ ไม่ต้องซิงก์ข้อมูล
     if (!accessToken) {
       return;
     }
+
+    let cancelled = false;
 
     const syncProfile = async () => {
       try {
@@ -104,16 +108,20 @@ export function AuthProvider({ children }) {
           "[Auth] Starting profile sync..."
         );
 
-        const response = await fetch(`${API_URL}/sync-profile`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
-  },
-});
+        const response = await fetch(
+          `${API_URL}/api/auth/sync-profile`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-        // อ่านผลลัพธ์จาก Backend
         const result = await response.json();
+
+        if (cancelled) return;
 
         if (!response.ok) {
           console.error(
@@ -121,24 +129,28 @@ export function AuthProvider({ children }) {
             result.message,
             result.error ?? ""
           );
-
           return;
         }
 
         console.log(
           "[Auth] Profile sync successful:",
-          result.profile
+          result.user
         );
       } catch (error) {
-        console.error(
-          "[Auth] Cannot connect to profile sync API:",
-          error
-        );
+        if (!cancelled) {
+          console.error(
+            "[Auth] Cannot connect to profile sync API:",
+            error
+          );
+        }
       }
     };
 
-    // เรียก Backend หลังได้ Session แล้ว
     syncProfile();
+
+    return () => {
+      cancelled = true;
+    };
   }, [session?.access_token]);
 
   // ========================================
