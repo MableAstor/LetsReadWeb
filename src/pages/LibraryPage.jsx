@@ -6,7 +6,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 
-import WanttoRead from "../components/Wanttoread";
+import WanttoRead from "../components/Wanttoread.jsx";
 import WanttoBuy from "../components/WanttoBuy";
 import Savebookfrom from "../components/Savebookfrom";
 
