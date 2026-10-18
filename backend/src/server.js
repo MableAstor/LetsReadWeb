@@ -8,10 +8,14 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = (process.env.FRONTEND_URL || "")
-  .split(",")
-  .map((url) => url.trim())
-  .filter(Boolean);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  ...(process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((url) => url.trim().replace(/\/+$/, ""))
+    .filter(Boolean),
+];
 
 app.use(
   cors({
@@ -21,8 +25,11 @@ app.use(
         return callback(null, true);
       }
 
+      console.error("[CORS] Blocked origin:", origin);
       return callback(new Error("Origin not allowed by CORS"));
     },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
