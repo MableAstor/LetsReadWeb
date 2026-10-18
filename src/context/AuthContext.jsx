@@ -104,16 +104,13 @@ export function AuthProvider({ children }) {
           "[Auth] Starting profile sync..."
         );
 
-        const response = await fetch(
-          "http://localhost:5000/api/auth/sync-profile",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const response = await fetch(`${API_URL}/sync-profile`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  },
+});
 
         // อ่านผลลัพธ์จาก Backend
         const result = await response.json();

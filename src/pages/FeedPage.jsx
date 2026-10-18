@@ -5,7 +5,11 @@ import ReviewInput from "../components/ReviewInput";
 import WriteReviewModal from "../components/WriteReviewModal";
 import ReviewCard from "../components/ReviewCard";
 
-const API_URL = "http://localhost:5000/api/auth";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "") + "/api/auth";
+
 
 export default function FeedPage() {
   const [isReviewOpen, setIsReviewOpen] = useState(false);

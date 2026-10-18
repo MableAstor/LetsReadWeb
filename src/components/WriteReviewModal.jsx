@@ -23,7 +23,9 @@ import {
   SelectValue,
 } from "./ui/select";
 
-const API_URL = "http://localhost:5000/api/auth";
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "") + "/api/auth";
 const STORAGE_BUCKET = "review-images";
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
