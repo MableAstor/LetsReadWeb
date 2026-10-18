@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, X } from "lucide-react";
@@ -11,13 +10,16 @@ import { supabase } from "../lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
+const API_URL = (
+    import.meta.env.VITE_API_URL || "http://localhost:5000"
+  ).replace(/\/+$/, "");
+
 export default function LoginPage() {
+  
+
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -47,18 +49,15 @@ export default function LoginPage() {
         };
       }
 
-      const { data, error } =
-        await supabase.auth.signInWithOAuth({
-          provider,
-          options,
-        });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options,
+      });
 
       if (error) throw error;
 
       if (!data?.url) {
-        throw new Error(
-          "Supabase ไม่ได้ส่ง URL สำหรับเข้าสู่ระบบกลับมา"
-        );
+        throw new Error("Supabase ไม่ได้ส่ง URL สำหรับเข้าสู่ระบบกลับมา");
       }
 
       window.location.assign(data.url);
@@ -75,7 +74,7 @@ export default function LoginPage() {
       alert(
         `เข้าสู่ระบบด้วย ${providerName} ไม่สำเร็จ\n${
           error?.message || "กรุณาลองใหม่อีกครั้ง"
-        }`
+        }`,
       );
 
       setSocialLoading("");
@@ -91,60 +90,43 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/auth/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: email.trim(),
-            password,
-          }),
-        }
-      );
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
 
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        alert(
-          result.message ||
-            "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล"
-        );
+        alert(result.message || "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล");
         return;
       }
 
-      const { session, profile } = result;
+      const { session, user } = result;
 
-      if (
-        !session?.access_token ||
-        !session?.refresh_token
-      ) {
-        alert(
-          "ไม่พบข้อมูล Session กรุณาลองเข้าสู่ระบบใหม่"
-        );
+      if (!session?.access_token || !session?.refresh_token) {
+        alert("ไม่พบข้อมูล Session กรุณาลองเข้าสู่ระบบใหม่");
         return;
       }
 
-      if (!profile) {
-        alert(
-          "เข้าสู่ระบบได้ แต่ไม่พบโปรไฟล์ทดลอง กรุณาตรวจสอบ Backend"
-        );
+      if (!user) {
+        alert("เข้าสู่ระบบได้ แต่ไม่พบโปรไฟล์ทดลอง กรุณาตรวจสอบ Backend");
         return;
       }
 
-      const { error: sessionError } =
-        await supabase.auth.setSession({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-        });
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
 
       if (sessionError) {
-        console.error(
-          "[Login] Set session error:",
-          sessionError.message
-        );
+        console.error("[Login] Set session error:", sessionError.message);
 
         alert("ไม่สามารถบันทึกสถานะเข้าสู่ระบบได้");
         return;
@@ -156,7 +138,7 @@ export default function LoginPage() {
       console.error("[Login] Unexpected error:", error);
 
       alert(
-        "ไม่สามารถเชื่อมต่อ Backend ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์เปิดอยู่"
+        "ไม่สามารถเชื่อมต่อ Backend ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์เปิดอยู่",
       );
     } finally {
       setLoading(false);
@@ -190,9 +172,7 @@ export default function LoginPage() {
   ];
 
   return (
-    
-<main className="flex min-h-screen w-full flex-col items-center justify-center bg-gradient-to-tr from-[#dce7f8] via-[#f7e4e5] to-[#fdedcd] px-3 py-6 sm:px-6 sm:py-10">
-
+    <main className="flex min-h-screen w-full flex-col items-center justify-center bg-gradient-to-tr from-[#dce7f8] via-[#f7e4e5] to-[#fdedcd] px-3 py-6 sm:px-6 sm:py-10">
       <Card className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl sm:rounded-[2rem]">
         {/* Close */}
         <Button
@@ -210,10 +190,7 @@ export default function LoginPage() {
           {/* Left: Branding */}
           <section className="flex flex-col items-center text-center">
             <div className="mb-5 flex h-20 w-20 items-center justify-center text-black sm:h-24 sm:w-24">
-              <BookOpen
-                className="h-full w-full"
-                strokeWidth={1.5}
-              />
+              <BookOpen className="h-full w-full" strokeWidth={1.5} />
             </div>
 
             <h1 className="text-2xl font-semibold tracking-wide text-black sm:text-3xl">
@@ -249,9 +226,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="login-password">
-                  Password
-                </Label>
+                <Label htmlFor="login-password">Password</Label>
 
                 <Input
                   id="login-password"
@@ -312,9 +287,7 @@ export default function LoginPage() {
                   type="button"
                   variant="outline"
                   disabled={isDisabled}
-                  onClick={() =>
-                    handleSocialLogin(provider.id)
-                  }
+                  onClick={() => handleSocialLogin(provider.id)}
                   className={`grid h-12 w-full grid-cols-[28px_minmax(0,1fr)_28px] items-center rounded-xl px-4 text-xs font-semibold text-black shadow-sm transition sm:text-sm ${provider.className}`}
                 >
                   <img

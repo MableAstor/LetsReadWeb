@@ -15,6 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
 export default function SignInPage() {
   const navigate = useNavigate();
 
@@ -36,6 +40,7 @@ export default function SignInPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  
   // Register with email and password
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,42 +48,56 @@ export default function SignInPage() {
     if (loading || socialLoading) return;
 
     if (formData.password !== formData.confirmPassword) {
-      alert("รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน");
+      alert("รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน");
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/auth/register",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
-        }
-      );
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          username: formData.username.trim(),
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+        }),
+      });
 
-      const result = await response.json().catch(() => ({}));
+      const result = await response.json();
 
-      if (!response.ok) {
-        alert(
-          result.message || "สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่"
-        );
-        return;
+      if (!response.ok || result.success === false) {
+        throw new Error(result.message || "สมัครสมาชิกไม่สำเร็จ");
       }
 
-      alert("สมัครสมาชิกสำเร็จ");
-      navigate("/Login");
+      if (result.session?.access_token && result.session?.refresh_token) {
+        const { error } = await supabase.auth.setSession({
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+        });
+
+        if (error) throw error;
+
+        alert("สมัครสมาชิกสำเร็จ");
+        navigate("/home");
+      } else {
+        alert(
+          result.message ||
+            "สมัครสมาชิกสำเร็จ กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี"
+        );
+      }
     } catch (error) {
       console.error("[Register] Error:", error);
-      alert("ไม่สามารถเชื่อมต่อ Server ได้");
+      alert(error.message || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
     } finally {
       setLoading(false);
     }
   };
+
 
   // Social login
   const handleSocialLogin = async (provider) => {
@@ -128,7 +147,7 @@ export default function SignInPage() {
         "border border-gray-100 bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] hover:opacity-90",
     },
     {
-      id: "custom:line",
+      id: "custom:line-oauth",
       label: "LINE",
       image: LineIcon,
       className:
