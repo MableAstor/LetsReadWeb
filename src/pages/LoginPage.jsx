@@ -1,11 +1,21 @@
-import React, { useState } from "react";
+
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BookOpen, X } from "lucide-react";
 
 import FacebookIcon from "../assets/facebook-logo.png";
 import LineIcon from "../assets/line-logo.png";
-import googleIcon from "../assets/google-logo.png";
+import GoogleIcon from "../assets/google-logo.png";
 
 import { supabase } from "../lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -15,31 +25,22 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState("");
 
-  // ========================================
-  // ย้อนกลับไปหน้าก่อนหน้า
-  // ========================================
   const handleClose = () => {
     navigate(-1);
   };
 
-  // ========================================
-  // LOGIN ด้วย Google, Facebook และ LINE
-  // ========================================
+  // Social Login: Google, Facebook, LINE
   const handleSocialLogin = async (provider) => {
     if (loading || socialLoading) return;
 
     setSocialLoading(provider);
 
     try {
-      console.log("[Social Login] Starting:", provider);
-
-      // ตั้งค่า OAuth โดยคงวิธีเดิมไว้
       const options = {
         redirectTo: `${window.location.origin}/home`,
         skipBrowserRedirect: true,
       };
 
-      // ให้ Google แสดงหน้าเลือกบัญชีทุกครั้ง
       if (provider === "google") {
         options.queryParams = {
           prompt: "select_account",
@@ -52,9 +53,7 @@ export default function LoginPage() {
           options,
         });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (!data?.url) {
         throw new Error(
@@ -62,15 +61,9 @@ export default function LoginPage() {
         );
       }
 
-      console.log("[Social Login] Redirecting:", provider);
-
-      // ไปยังหน้าเข้าสู่ระบบของผู้ให้บริการ
       window.location.assign(data.url);
     } catch (error) {
-      console.error(
-        `[Social Login] ${provider} error:`,
-        error
-      );
+      console.error("[Social Login] Error:", error);
 
       const providerName =
         provider === "google"
@@ -89,9 +82,7 @@ export default function LoginPage() {
     }
   };
 
-  // ========================================
-  // LOGIN ด้วย Email และ Password
-  // ========================================
+  // Email + Password Login
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -100,7 +91,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. ส่งข้อมูลไปยัง Backend
       const response = await fetch(
         "http://localhost:5000/api/auth/login",
         {
@@ -115,53 +105,35 @@ export default function LoginPage() {
         }
       );
 
-      // 2. อ่านผลลัพธ์จาก Backend
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        console.error("[Login] Backend error:", result);
-
         alert(
           result.message ||
             "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล"
         );
-
         return;
       }
 
-      // 3. ตรวจสอบ Session
       const { session, profile } = result;
 
       if (
         !session?.access_token ||
         !session?.refresh_token
       ) {
-        console.error("[Login] Missing session:", result);
-
         alert(
           "ไม่พบข้อมูล Session กรุณาลองเข้าสู่ระบบใหม่"
         );
-
         return;
       }
 
-      // 4. ตรวจสอบโปรไฟล์ทดลอง
       if (!profile) {
-        console.error(
-          "[Login] Missing test profile:",
-          result
-        );
-
         alert(
           "เข้าสู่ระบบได้ แต่ไม่พบโปรไฟล์ทดลอง กรุณาตรวจสอบ Backend"
         );
-
         return;
       }
 
-      console.log("[Login] Test profile:", profile);
-
-      // 5. บันทึก Session ให้ Supabase ฝั่ง Frontend
       const { error: sessionError } =
         await supabase.auth.setSession({
           access_token: session.access_token,
@@ -174,16 +146,11 @@ export default function LoginPage() {
           sessionError.message
         );
 
-        alert(
-          "ไม่สามารถบันทึกสถานะเข้าสู่ระบบได้"
-        );
-
+        alert("ไม่สามารถบันทึกสถานะเข้าสู่ระบบได้");
         return;
       }
 
-      // 6. ไปหน้าหลัก
       alert("เข้าสู่ระบบสำเร็จ");
-
       navigate("/home", { replace: true });
     } catch (error) {
       console.error("[Login] Unexpected error:", error);
@@ -196,213 +163,180 @@ export default function LoginPage() {
     }
   };
 
-  // ========================================
-  // UI
-  // ========================================
+  const isDisabled = loading || Boolean(socialLoading);
+
+  const socialProviders = [
+    {
+      id: "facebook",
+      label: "Facebook",
+      image: FacebookIcon,
+      className:
+        "border-0 bg-gradient-to-r from-[#1877F2] to-[#92bcf7] hover:opacity-90",
+    },
+    {
+      id: "google",
+      label: "Google",
+      image: GoogleIcon,
+      className:
+        "border border-gray-100 bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] hover:opacity-90",
+    },
+    {
+      id: "custom:line-oauth",
+      label: "LINE",
+      image: LineIcon,
+      className:
+        "border-0 bg-gradient-to-r from-[#06C755] to-[#97f2a9] hover:opacity-90",
+    },
+  ];
+
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative font-sans">
-      <div className="relative w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl p-8 sm:p-12 md:p-16 flex flex-col md:flex-row items-center justify-between gap-10">
+    
+<main className="flex min-h-screen w-full flex-col items-center justify-center bg-gradient-to-tr from-[#dce7f8] via-[#f7e4e5] to-[#fdedcd] px-3 py-6 sm:px-6 sm:py-10">
 
-        {/* ปุ่มย้อนกลับ */}
-        <button
+      <Card className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-xl sm:rounded-[2rem]">
+        {/* Close */}
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={handleClose}
-          className="absolute top-6 right-8 text-gray-800 hover:text-black text-2xl font-bold p-1 cursor-pointer transition"
+          aria-label="Go back"
+          className="absolute right-3 top-3 z-10 rounded-full text-gray-600 hover:bg-gray-100 hover:text-black sm:right-5 sm:top-5"
         >
-          ✕
-        </button>
+          <X className="h-5 w-5" />
+        </Button>
 
-        {/* ฝั่งซ้าย: โลโก้และข้อความ */}
-        <div className="w-full md:w-5/12 flex flex-col items-center text-center">
-          <div className="w-24 h-24 mb-6 text-black flex items-center justify-center">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-full h-full"
-            >
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-            </svg>
-          </div>
-
-          <h1 className="text-2xl font-semibold text-black tracking-wide mb-2">
-            Let’s read LOG IN
-          </h1>
-
-          <h2 className="text-sm font-bold text-black mb-1">
-            Welcome back, reader!
-          </h2>
-
-          <p className="text-xs text-gray-700">
-            Ready to find your next favorite book?
-          </p>
-        </div>
-
-        {/* ฝั่งขวา: ฟอร์มล็อกอิน */}
-        <div className="w-full md:w-6/12 flex flex-col">
-          <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* Email */}
-            <div>
-              <label
-                htmlFor="login-email"
-                className="block text-sm font-bold text-black mb-1.5"
-              >
-                Email :
-              </label>
-
-              <input
-                id="login-email"
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-[#dcdcdc] rounded-lg text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-                autoComplete="email"
-                required
+        <CardContent className="grid grid-cols-1 gap-8 p-5 pt-14 sm:p-8 sm:pt-16 md:grid-cols-2 md:items-center md:gap-10 md:p-10 lg:gap-14 lg:p-14">
+          {/* Left: Branding */}
+          <section className="flex flex-col items-center text-center">
+            <div className="mb-5 flex h-20 w-20 items-center justify-center text-black sm:h-24 sm:w-24">
+              <BookOpen
+                className="h-full w-full"
+                strokeWidth={1.5}
               />
             </div>
 
-            {/* Password */}
-            <div>
-              <label
-                htmlFor="login-password"
-                className="block text-sm font-bold text-black mb-1.5"
-              >
-                Password :
-              </label>
+            <h1 className="text-2xl font-semibold tracking-wide text-black sm:text-3xl">
+              Let’s Read
+            </h1>
 
-              <input
-                id="login-password"
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-[#dcdcdc] rounded-lg text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-                autoComplete="current-password"
-                required
-              />
-            </div>
+            <p className="mt-2 text-sm font-bold text-gray-900 sm:text-base">
+              Welcome back, reader!
+            </p>
 
-            {/* สมัครสมาชิก / ลืมรหัสผ่าน */}
-            <div className="flex items-center justify-between text-xs pt-0.5">
-              <button
-                type="button"
-                onClick={() => navigate("/Signin")}
-                className="font-bold text-black hover:underline cursor-pointer"
-              >
-                Create Account
-              </button>
+            <p className="mt-1 max-w-xs text-sm leading-6 text-gray-600">
+              Ready to find your next favorite book?
+            </p>
+          </section>
 
-              <button
-                type="button"
-                onClick={() => navigate("/forgotpass")}
-                className="font-bold text-black underline hover:text-blue-600 cursor-pointer"
-              >
-                Forgot password?
-              </button>
-            </div>
+          {/* Right: Login Form */}
+          <section className="w-full min-w-0">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Email</Label>
 
-            {/* ปุ่ม Login */}
-            <div className="pt-2">
-              <button
+                <Input
+                  id="login-email"
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                  disabled={isDisabled}
+                  className="h-11 rounded-lg border-gray-200 bg-gray-100 focus-visible:ring-blue-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="login-password">
+                  Password
+                </Label>
+
+                <Input
+                  id="login-password"
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  disabled={isDisabled}
+                  className="h-11 rounded-lg border-gray-200 bg-gray-100 focus-visible:ring-blue-400"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs sm:text-sm">
+                <button
+                  type="button"
+                  onClick={() => navigate("/Signin")}
+                  className="font-semibold text-gray-800 hover:underline"
+                >
+                  Create Account
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/forgotpass")}
+                  className="font-semibold text-gray-700 underline underline-offset-2 hover:text-blue-600"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <Button
                 type="submit"
-                disabled={loading || Boolean(socialLoading)}
-                className="w-full py-3 bg-[#dcdcdc] hover:bg-gray-300 disabled:opacity-60 disabled:cursor-not-allowed text-black text-xs font-bold rounded-lg transition cursor-pointer"
+                disabled={isDisabled}
+                className="h-11 w-full rounded-lg bg-[#dcdcdc] font-bold text-black hover:bg-gray-300"
               >
                 {loading ? "Logging in..." : "Log in"}
-              </button>
+              </Button>
+            </form>
+
+            {/* Divider */}
+            <div className="my-5 flex items-center gap-3">
+              <Separator className="flex-1" />
+
+              <span className="shrink-0 text-xs font-semibold text-gray-600">
+                Log in with
+              </span>
+
+              <Separator className="flex-1" />
             </div>
-          </form>
 
-          {/* เส้นคั่น */}
-          <div className="relative flex py-5 items-center">
-            <div className="flex-grow border-t border-gray-400" />
+            {/* Social Login */}
+            <div className="space-y-3">
+              {socialProviders.map((provider) => (
+                <Button
+                  key={provider.id}
+                  type="button"
+                  variant="outline"
+                  disabled={isDisabled}
+                  onClick={() =>
+                    handleSocialLogin(provider.id)
+                  }
+                  className={`grid h-12 w-full grid-cols-[28px_minmax(0,1fr)_28px] items-center rounded-xl px-4 text-xs font-semibold text-black shadow-sm transition sm:text-sm ${provider.className}`}
+                >
+                  <img
+                    src={provider.image}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-7 w-7 object-contain"
+                  />
 
-            <span className="flex-shrink mx-3 text-xs font-bold text-black">
-              Log in With
-            </span>
+                  <span className="truncate text-center">
+                    {socialLoading === provider.id
+                      ? "Connecting..."
+                      : `Log in with ${provider.label}`}
+                  </span>
 
-            <div className="flex-grow border-t border-gray-400" />
-          </div>
-
-          {/* Social Login */}
-          <div className="space-y-3">
-
-            {/* Facebook */}
-            <button
-              type="button"
-              disabled={loading || Boolean(socialLoading)}
-              onClick={() => handleSocialLogin("facebook")}
-              className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#1877F2] to-[#92bcf7] shadow-sm hover:opacity-95 disabled:opacity-60 transition cursor-pointer"
-            >
-              <img
-                src={FacebookIcon}
-                alt="Facebook Logo"
-                className="w-7 h-7 object-contain"
-              />
-
-              <span className="text-black font-semibold text-center">
-                {socialLoading === "facebook"
-                  ? "Connecting..."
-                  : "Log in with Facebook"}
-              </span>
-
-              <div className="w-7" />
-            </button>
-
-            {/* Google */}
-            <button
-              type="button"
-              disabled={loading || Boolean(socialLoading)}
-              onClick={() => handleSocialLogin("google")}
-              className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] border border-gray-100 shadow-sm hover:opacity-95 disabled:opacity-60 transition cursor-pointer"
-            >
-              <img
-                src={googleIcon}
-                alt="Google Logo"
-                className="w-7 h-7 object-contain"
-              />
-
-              <span className="text-black font-semibold text-center">
-                {socialLoading === "google"
-                  ? "Connecting..."
-                  : "Log in with Google"}
-              </span>
-
-              <div className="w-7" />
-            </button>
-
-            {/* LINE */}
-            <button
-              type="button"
-              disabled={loading || Boolean(socialLoading)}
-              onClick={() =>
-                handleSocialLogin("custom:line-oauth")
-              }
-              className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#06C755] to-[#97f2a9] shadow-sm hover:opacity-95 disabled:opacity-60 transition cursor-pointer"
-            >
-              <img
-                src={LineIcon}
-                alt="LINE Logo"
-                className="w-7 h-7 object-contain"
-              />
-
-              <span className="text-black font-semibold text-center">
-                {socialLoading === "custom:line-oauth"
-                  ? "Connecting..."
-                  : "Log in with Line"}
-              </span>
-
-              <div className="w-7" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+                  <span aria-hidden="true" />
+                </Button>
+              ))}
+            </div>
+          </section>
+        </CardContent>
+      </Card>
+    </main>
   );
 }

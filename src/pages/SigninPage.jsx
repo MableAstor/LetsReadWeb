@@ -1,19 +1,29 @@
-import React, { useState } from "react";
+
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BookOpen, Eye, EyeOff, X } from "lucide-react";
+
 import FacebookIcon from "../assets/facebook-logo.png";
 import LineIcon from "../assets/line-logo.png";
-import googleIcon from "../assets/google-logo.png";
-import { Eye, EyeOff } from "lucide-react";
+import GoogleIcon from "../assets/google-logo.png";
+
 import { supabase } from "../lib/supabase";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 export default function SignInPage() {
   const navigate = useNavigate();
 
-  // State สำหรับเปิด-ปิดดูรหัสผ่านทั้งสองช่อง
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+  const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState("");
 
-  // จัดการข้อมูลฟอร์ม
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -26,254 +36,305 @@ export default function SignInPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Register with email and password
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (loading || socialLoading) return;
 
     if (formData.password !== formData.confirmPassword) {
       alert("รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน");
       return;
     }
 
-    try {
-      const response = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
+    setLoading(true);
 
-      const result = await response.json();
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/auth/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        }
+      );
+
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        alert(result.message);
+        alert(
+          result.message || "สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่"
+        );
         return;
       }
 
       alert("สมัครสมาชิกสำเร็จ");
       navigate("/Login");
     } catch (error) {
-      console.error(error);
+      console.error("[Register] Error:", error);
       alert("ไม่สามารถเชื่อมต่อ Server ได้");
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Social login
   const handleSocialLogin = async (provider) => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
-      redirectTo: `${window.location.origin}/home`,
-    },
-  });
+    if (loading || socialLoading) return;
 
-  if (error) {
-    console.error("Social login error:", error);
-    alert("เข้าสู่ระบบไม่สำเร็จ: " + error.message);
-  }
-};
+    setSocialLoading(provider);
+
+    try {
+      const { data, error } =
+        await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: `${window.location.origin}/home`,
+            skipBrowserRedirect: true,
+          },
+        });
+
+      if (error) throw error;
+
+      if (!data?.url) {
+        throw new Error("ไม่พบ URL สำหรับเข้าสู่ระบบ");
+      }
+
+      window.location.assign(data.url);
+    } catch (error) {
+      console.error("[Social Login] Error:", error);
+      alert(`เข้าสู่ระบบไม่สำเร็จ: ${error.message}`);
+      setSocialLoading("");
+    }
+  };
+
+  const isDisabled = loading || Boolean(socialLoading);
+
+  const socialProviders = [
+    {
+      id: "facebook",
+      label: "Facebook",
+      image: FacebookIcon,
+      className:
+        "border-0 bg-gradient-to-r from-[#1877F2] to-[#92bcf7] hover:opacity-90",
+    },
+    {
+      id: "google",
+      label: "Google",
+      image: GoogleIcon,
+      className:
+        "border border-gray-100 bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] hover:opacity-90",
+    },
+    {
+      id: "custom:line",
+      label: "LINE",
+      image: LineIcon,
+      className:
+        "border-0 bg-gradient-to-r from-[#06C755] to-[#97f2a9] hover:opacity-90",
+    },
+  ];
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative font-sans">
-      {/* กล่องการ์ดสีขาวตรงกลาง */}
-      <div className="relative w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl p-8 sm:p-12 md:p-14 flex flex-col md:flex-row items-center justify-between gap-8">
-        {/* ปุ่มกากบาท (X) มุมขวาบน */}
-        <button
+    <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-[#FCE4E4] via-[#E8EEFF] to-[#D6F6DB] px-3 py-6 font-sans sm:px-6 sm:py-10">
+      <Card className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl sm:rounded-[2rem]">
+        {/* Close button */}
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={() => navigate(-1)}
-          className="absolute top-6 right-8 text-gray-800 hover:text-black text-2xl font-bold p-1 cursor-pointer transition"
+          aria-label="Go back"
+          className="absolute right-3 top-3 z-10 rounded-full text-gray-600 hover:bg-gray-100 hover:text-black sm:right-5 sm:top-5"
         >
-          ✕
-        </button>
+          <X className="h-5 w-5" />
+        </Button>
 
-        {/* --- ฝั่งซ้าย: โลโก้และข้อความต้อนรับ --- */}
-        <div className="w-full md:w-5/12 flex flex-col items-center text-center">
-          {/* ไอคอนรูปเล่มหนังสือ */}
-          <div className="w-20 h-20 mb-4 text-black flex items-center justify-center">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-full h-full"
-            >
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-            </svg>
-          </div>
-
-          <h1 className="text-2xl font-semibold text-black tracking-wide mb-2">
-            Let’s read SIGN IN
-          </h1>
-          <h2 className="text-sm font-bold text-black mb-1">
-            Welcome to Let’s Read!
-          </h2>
-          <p className="text-xs text-gray-700">
-            Your next favorite story is waiting for you.
-          </p>
-        </div>
-
-        {/* --- ฝั่งขวา: ฟอร์มสมัคร 4 ช่อง + ปุ่ม Social --- */}
-        <div className="w-full md:w-6/12 flex flex-col">
-          <form onSubmit={handleSubmit} className="space-y-2.5">
-            {/* ช่อง Email */}
-            <div>
-              <label className="block text-md font-bold text-black mb-1">
-                Email :
-              </label>
-              <input
-                type="email"
-                name="email"
-                placeholder="Email"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-3.5 py-3 bg-[#dcdcdc] rounded-lg text-xs text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                required
-              />
+        <CardContent className="grid grid-cols-1 gap-7 p-5 pt-14 sm:p-8 sm:pt-16 md:grid-cols-2 md:items-center md:gap-10 md:p-10 lg:gap-14 lg:p-14">
+          {/* Branding */}
+          <section className="flex flex-col items-center text-center">
+            <div className="mb-4 flex h-20 w-20 items-center justify-center text-black sm:h-24 sm:w-24">
+              <BookOpen className="h-full w-full" strokeWidth={1.5} />
             </div>
 
-            {/* ช่อง Username */}
-            <div>
-              <label className="block text-md font-bold text-black mb-1">
-                Username :
-              </label>
-              <input
-                type="text"
-                name="username"
-                placeholder="Username"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full px-3.5 py-3 bg-[#dcdcdc] rounded-lg text-xs text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                required
-              />
-            </div>
+            <h1 className="text-2xl font-semibold tracking-wide text-black sm:text-3xl">
+              Let’s Read
+            </h1>
 
-            {/* ช่อง Password */}
-            <div>
-              <label className="block text-md font-bold text-black mb-1">
-                Password :
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="Password"
-                  value={formData.password}
+            <h2 className="mt-2 text-sm font-bold text-black sm:text-base">
+              Welcome to Let’s Read!
+            </h2>
+
+            <p className="mt-1 max-w-xs text-sm leading-6 text-gray-600">
+              Your next favorite story is waiting for you.
+            </p>
+          </section>
+
+          {/* Registration form */}
+          <section className="w-full min-w-0">
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="register-email">Email</Label>
+                <Input
+                  id="register-email"
+                  type="email"
+                  name="email"
+                  placeholder="Email"
+                  value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-3.5 pr-11 py-3 bg-[#dcdcdc] rounded-lg text-xs text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  autoComplete="email"
                   required
+                  disabled={isDisabled}
+                  className="h-11 rounded-lg border-gray-200 bg-gray-100 focus-visible:ring-blue-400"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 text-gray-500 hover:text-gray-700 focus:outline-none cursor-pointer p-1"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
               </div>
-            </div>
 
-            {/* ช่อง Confirm Password */}
-            <div>
-              <label className="block text-md font-bold text-black mb-1">
-                Confirm Password :
-              </label>
-              <div className="relative flex items-center">
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  name="confirmPassword"
-                  placeholder="Confirm Password"
-                  value={formData.confirmPassword}
+              <div className="space-y-1.5">
+                <Label htmlFor="register-username">Username</Label>
+                <Input
+                  id="register-username"
+                  type="text"
+                  name="username"
+                  placeholder="Username"
+                  value={formData.username}
                   onChange={handleChange}
-                  className="w-full pl-3.5 pr-11 py-3 bg-[#dcdcdc] rounded-lg text-xs text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  autoComplete="username"
                   required
+                  disabled={isDisabled}
+                  className="h-11 rounded-lg border-gray-200 bg-gray-100 focus-visible:ring-blue-400"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((prev) => !prev)}
-                  className="absolute right-3 text-gray-500 hover:text-gray-700 focus:outline-none cursor-pointer p-1"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
               </div>
-            </div>
 
-            {/* ปุ่ม Sign in สีเทา */}
-            <div className="pt-2">
-              <button
+              <div className="space-y-1.5">
+                <Label htmlFor="register-password">Password</Label>
+
+                <div className="relative">
+                  <Input
+                    id="register-password"
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    placeholder="Password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    autoComplete="new-password"
+                    required
+                    disabled={isDisabled}
+                    className="h-11 rounded-lg border-gray-200 bg-gray-100 pr-11 focus-visible:ring-blue-400"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    disabled={isDisabled}
+                    className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-gray-500 hover:bg-transparent hover:text-gray-800"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="register-confirm-password">
+                  Confirm Password
+                </Label>
+
+                <div className="relative">
+                  <Input
+                    id="register-confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    name="confirmPassword"
+                    placeholder="Confirm Password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    autoComplete="new-password"
+                    required
+                    disabled={isDisabled}
+                    className="h-11 rounded-lg border-gray-200 bg-gray-100 pr-11 focus-visible:ring-blue-400"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={
+                      showConfirmPassword
+                        ? "Hide confirm password"
+                        : "Show confirm password"
+                    }
+                    onClick={() =>
+                      setShowConfirmPassword((prev) => !prev)
+                    }
+                    disabled={isDisabled}
+                    className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-gray-500 hover:bg-transparent hover:text-gray-800"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <Button
                 type="submit"
-                className="w-full py-3 bg-[#dcdcdc] hover:bg-gray-300 text-black text-xs font-bold rounded-lg transition cursor-pointer"
+                disabled={isDisabled}
+                className="h-11 w-full rounded-lg bg-[#dcdcdc] font-bold text-black hover:bg-gray-300"
               >
-                Sign in
-              </button>
+                {loading ? "Creating account..." : "Sign in"}
+              </Button>
+            </form>
+
+            {/* Divider */}
+            <div className="my-4 flex items-center gap-3">
+              <Separator className="flex-1" />
+              <span className="shrink-0 text-xs font-semibold text-gray-600">
+                Sign in with
+              </span>
+              <Separator className="flex-1" />
             </div>
-          </form>
 
-          {/* เส้นคั่น "Sign in With" */}
-          <div className="relative flex py-3 items-center">
-            <div className="flex-grow border-t border-gray-400"></div>
-            <span className="flex-shrink mx-3 text-xs font-bold text-black">
-              Sign in With
-            </span>
-            <div className="flex-grow border-t border-gray-400"></div>
-          </div>
+            {/* Social login */}
+            <div className="space-y-3">
+              {socialProviders.map((provider) => (
+                <Button
+                  key={provider.id}
+                  type="button"
+                  variant="outline"
+                  disabled={isDisabled}
+                  onClick={() => handleSocialLogin(provider.id)}
+                  className={`grid h-12 w-full grid-cols-[28px_minmax(0,1fr)_28px] items-center rounded-xl px-4 text-xs font-semibold text-black shadow-sm transition sm:text-sm ${provider.className}`}
+                >
+                  <img
+                    src={provider.image}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-7 w-7 object-contain"
+                  />
 
-          {/* ปุ่ม Social Login */}
-          <div className="space-y-3">
-            {/* ปุ่ม Facebook */}
-            <button
-              type="button"
-              onClick={() => handleSocialLogin("facebook")}
-              className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#1877F2] to-[#92bcf7] shadow-sm hover:opacity-95 transition cursor-pointer"
-            >
-              <img
-                src={FacebookIcon}
-                alt="Facebook Logo"
-                className="w-7 h-7 object-contain"
-              />
-              <span className="text-black font-semibold text-center">
-                Log in with Facebook
-              </span>
-              <div className="w-7"></div>
-            </button>
+                  <span className="truncate text-center">
+                    {socialLoading === provider.id
+                      ? "Connecting..."
+                      : `Sign in with ${provider.label}`}
+                  </span>
 
-            {/* ปุ่ม Google */}
-            <button
-              type="button"
-              onClick={() => handleSocialLogin("google")}
-              className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#feeef1] via-[#d7e5fa] to-[#d6f6db] border border-gray-100 shadow-sm hover:opacity-95 transition cursor-pointer"
-            >
-              <img
-                src={googleIcon}
-                alt="Google Logo"
-                className="w-7 h-7 object-contain"
-              />
-              <span className="text-black font-semibold text-center">
-                Log in with Google
-              </span>
-              <div className="w-7"></div>
-            </button>
-
-            {/* ปุ่ม Line */}
-            <button
-              type="button"
-              onClick={() => handleSocialLogin("custom:line")}
-              className="w-full py-3 px-5 rounded-xl font-medium text-xs grid grid-cols-[28px_1fr_28px] items-center bg-gradient-to-r from-[#06C755] to-[#97f2a9] shadow-sm hover:opacity-95 transition cursor-pointer"
-            >
-              <img
-                src={LineIcon}
-                alt="Line Logo"
-                className="w-7 h-7 object-contain"
-              />
-              <span className="text-black font-semibold text-center">
-                Log in with Line
-              </span>
-              <div className="w-7"></div>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+                  <span aria-hidden="true" />
+                </Button>
+              ))}
+            </div>
+          </section>
+        </CardContent>
+      </Card>
+    </main>
   );
 }
