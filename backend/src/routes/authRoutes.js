@@ -259,11 +259,11 @@ router.get("/reviews/test", async (req, res) => {
     }
 
     console.log("[REVIEW] Reviews query:", {
-  hasData: Boolean(reviews),
-  count: reviews?.length,
-  error: reviewsError?.message,
-  code: reviewsError?.code,
-});
+      hasData: Boolean(reviews),
+      count: reviews.length,
+      error: reviewsError?.message,
+      code: reviewsError?.code,
+    });
 
     // ดึง UserID ที่ไม่ซ้ำกัน
     const userIds = [
@@ -287,14 +287,14 @@ router.get("/reviews/test", async (req, res) => {
       }
 
       users = data || [];
-    }
 
-    console.log("[REVIEW] Users query:", {
-  hasData: Boolean(data),
-  count: data?.length,
-  error: usersError?.message,
-  code: usersError?.code,
-});
+      console.log("[REVIEW] Users query:", {
+        hasData: Boolean(data),
+        count: data?.length,
+        error: usersError?.message,
+        code: usersError?.code,
+      });
+    }
 
     // จับคู่รีวิวกับชื่อผู้ใช้
     const userMap = new Map(
@@ -319,14 +319,6 @@ router.get("/reviews/test", async (req, res) => {
       error: error.message,
     });
   }
-});
-
-console.error("[REVIEW] Fetch error:", {
-  message: error?.message,
-  code: error?.code,
-  details: error?.details,
-  hint: error?.hint,
-  stack: error?.stack,
 });
 
 // ======================================================
