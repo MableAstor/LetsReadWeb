@@ -1,4 +1,4 @@
-
+// ใช้ข้อมูลชุดเดียวกันกับหลายหน้าของ Library
 export const viralBooks = [
   {
     id: 1,
@@ -121,12 +121,46 @@ export const topBooks = [
 import khemjira from "../assets/khemjira.gif";
 
 // หนังสือสำหรับแสดงใน Library
-export const libraryBooks = [
+export const saveBooks = [
   {
     id: 201,
     title: "Khemjira",
     author: "คาลิ",
     tags: ["Yaoi", "Dark"],
-    image: khemjira,
+    image: "https://media.discordapp.net/attachments/937611502431662141/1561787644214517880/book_detail_large_2.gif?ex=6ad79f96&is=6ad64e16&hm=3fd0b97de272f94c0bf02554ac3bc7fd486a048d022d868ae1c840956dd451d4&=",
   },
+  {
+    id: 202,
+    title: "Khemjira",
+    author: "คาลิ",
+    tags: ["Yaoi", "Dark"],
+    image: "https://media.discordapp.net/attachments/937611502431662141/1561787644214517880/book_detail_large_2.gif?ex=6ad79f96&is=6ad64e16&hm=3fd0b97de272f94c0bf02554ac3bc7fd486a048d022d868ae1c840956dd451d4&=",
+  },
+  {
+    id: 203,
+    title: "จันทร์ทิวากร",
+    author: "mungeaw",
+    tags: ["Yaoi", "Mpreg", "Romantic"],
+    image: "https://media.discordapp.net/attachments/937611502431662141/1561787644713771108/book_detail_large_1.gif?ex=6ad79f97&is=6ad64e17&hm=01c47692252bdea9d2de69e0ba8081bbfd1f79cd0e047d069e2e6066e72463c6&=",
+  },
+  {
+    id: 204,
+    title: "ตื่นมาก็ถูกบังคับให้เข้าร่วมรายการ ใครจะได้เป็นแฟนคุณศูล",
+    author: "กระต่ายปากแดง",
+    tags: ["Yaoi", "วงการบันเทิง", "โรแมนติก", "แฟนตาซี" , "เกิดใหม่"],
+    image: "https://media.discordapp.net/attachments/937611502431662141/1561787645259026442/book_detail_large.gif?ex=6ad79f97&is=6ad64e17&hm=611d42fa052aa8d6c656bc1e9d753c6ae856c4d82b0fef572ee1a4cc2ede3511&=",
+  },
+  {
+    id: 205,
+    title: "เพราะเรา... คู่กัน เล่ม 1",
+    author: "JittiRain",
+    tags: ["Yaoi"],
+    image: "https://media.discordapp.net/attachments/937611502431662141/1561788770116960328/book_detail_large_3.gif?ex=6ad7a0a3&is=6ad64f23&hm=0b0b8f375656645dfe2eb842898afcd712b0443b31c7de231c201f904eb64b20&=",
+  },
+
+  
 ];
+
+// ใช้ข้อมูลชุดเดียวกันกับหลายหน้าของ Library
+export const libraryBooks = saveBooks;
+export const savedBooks = saveBooks;

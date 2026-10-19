@@ -13,6 +13,7 @@ import Savebookfrom from "../components/Savebookfrom";
 import {
   viralBooks,
   topBooks,
+  savedBooks,
 } from "../data/books";
 
 import { Badge } from "../components/ui/badge";
@@ -20,30 +21,30 @@ import { Button } from "../components/ui/button";
 
 const initialLibrary = {
   wantToRead: [...viralBooks],
-  wantToBuy: topBooks.slice(0, 2),
+  wantToBuy: savedBooks.slice(0, 2),
 
   savedBooks: [
     {
-      book: topBooks[2],
+      book: savedBooks[2],
       review: {
         id: 1,
         username: "Emma",
-        bookTitle: topBooks[2].title,
-        mainCategory: topBooks[2].tags[0],
-        subCategory: topBooks[2].tags[1],
+        bookTitle: savedBooks[2].title,
+        mainCategory: savedBooks[2].tags[0],
+        subCategory: savedBooks[2].tags[1],
         rating: 5,
         reviewText:
           "This book was an amazing read! Highly recommended.",
       },
     },
     {
-      book: topBooks[3],
+      book: savedBooks[3],
       review: {
         id: 2,
         username: "John Doe",
-        bookTitle: topBooks[3].title,
-        mainCategory: topBooks[3].tags[0],
-        subCategory: topBooks[3].tags[1],
+        bookTitle: savedBooks[3].title,
+        mainCategory: savedBooks[3].tags[0],
+        subCategory: savedBooks[3].tags[1],
         rating: 4,
         reviewText:
           "A lovely story with interesting characters.",
