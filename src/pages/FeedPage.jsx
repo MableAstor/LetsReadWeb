@@ -20,12 +20,38 @@ export default function FeedPage() {
       setLoadingReviews(true);
       setFeedError("");
 
-      const response = await fetch(`${API_URL}/reviews/test`);
-      const result = await response.json().catch(() => ({}));
+      const requestUrl = `${API_URL}/reviews/test`;
+
+      console.log("[Feed] API_URL:", API_URL);
+      console.log("[Feed] Request URL:", requestUrl);
+
+      const response = await fetch(requestUrl);
+
+      // อ่าน Response อย่างปลอดภัย เผื่อ Backend ส่ง HTML แทน JSON
+      const responseText = await response.text();
+      let result = {};
+
+      try {
+        result = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        console.error(
+          "[Feed] Response is not valid JSON:",
+          responseText
+        );
+
+        throw new Error(
+          `เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ใช่ JSON (HTTP ${response.status})`
+        );
+      }
+
+      console.log("[Feed] Response status:", response.status);
+      console.log("[Feed] Response body:", result);
 
       if (!response.ok || result.success === false) {
         throw new Error(
-          result.message || result.error || "โหลดรีวิวไม่สำเร็จ"
+          result.message ||
+            result.error ||
+            `โหลดรีวิวไม่สำเร็จ (HTTP ${response.status})`
         );
       }
 
@@ -41,7 +67,12 @@ export default function FeedPage() {
       console.log("[Feed] Reviews loaded:", reviewList.length);
     } catch (error) {
       console.error("[Feed] Load reviews error:", error);
-      setFeedError(error.message || "โหลดรีวิวไม่สำเร็จ");
+
+      setFeedError(
+        error instanceof Error
+          ? error.message
+          : "โหลดรีวิวไม่สำเร็จ กรุณาลองใหม่"
+      );
     } finally {
       setLoadingReviews(false);
     }
