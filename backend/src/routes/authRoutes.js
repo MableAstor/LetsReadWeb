@@ -231,24 +231,32 @@ router.post("/register", async (req, res) => {
 router.get("/reviews/test", async (req, res) => {
   try {
     const { data: reviews, error: reviewsError } = await supabaseAdmin
-      .from("Reviews")
-      .select(`
-        ReviewsID,
-        UserID,
-        BooksID,
-        Book_Title,
-        Main_Category,
-        Sub_Category,
-        Review_Text,
-        Rating,
-        Image_URL,
-        Created_At
-      `)
-      .order("Created_At", { ascending: false });
+  .from("Reviews")
+  .select(`
+    ReviewsID,
+    UserID,
+    BooksID,
+    Book_Title,
+    Main_Category,
+    Sub_Category,
+    Review_Text,
+    Rating,
+    Image_URL,
+    Created_At
+  `)
+  .order("Created_At", { ascending: false });
 
-    if (reviewsError) {
-      throw reviewsError;
-    }
+console.log("[REVIEW] Reviews query:", {
+  hasData: Boolean(reviews),
+  count: reviews?.length,
+  error: reviewsError?.message,
+  code: reviewsError?.code,
+  details: reviewsError?.details,
+});
+
+if (reviewsError) {
+  throw reviewsError;
+}
 
     // หากยังไม่มีรีวิว ให้คืนอาร์เรย์ว่าง
     if (!reviews || reviews.length === 0) {
@@ -258,12 +266,6 @@ router.get("/reviews/test", async (req, res) => {
       });
     }
 
-    console.log("[REVIEW] Reviews query:", {
-      hasData: Boolean(reviews),
-      count: reviews.length,
-      error: reviewsError?.message,
-      code: reviewsError?.code,
-    });
 
     // ดึง UserID ที่ไม่ซ้ำกัน
     const userIds = [
@@ -278,22 +280,25 @@ router.get("/reviews/test", async (req, res) => {
 
     if (userIds.length > 0) {
       const { data, error: usersError } = await supabaseAdmin
-        .from("User")
-        .select("UserID, User_Name")
-        .in("UserID", userIds);
+  .from("User")
+  .select("UserID, User_Name")
+  .in("UserID", userIds);
 
-      if (usersError) {
-        throw usersError;
-      }
+console.log("[REVIEW] Users query:", {
+  hasData: Boolean(data),
+  count: data?.length,
+  error: usersError?.message,
+  code: usersError?.code,
+  details: usersError?.details,
+});
 
-      users = data || [];
+if (usersError) {
+  throw usersError;
+}
 
-      console.log("[REVIEW] Users query:", {
-        hasData: Boolean(data),
-        count: data?.length,
-        error: usersError?.message,
-        code: usersError?.code,
-      });
+users = data || [];
+
+      
     }
 
     // จับคู่รีวิวกับชื่อผู้ใช้
