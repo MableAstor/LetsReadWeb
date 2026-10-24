@@ -1,8 +1,8 @@
-
 import { useCallback, useEffect, useState } from "react";
 import ReviewInput from "../components/ReviewInput";
 import WriteReviewModal from "../components/WriteReviewModal";
 import ReviewCard from "../components/ReviewCard";
+import { supabase } from "../lib/supabase";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
@@ -25,7 +25,23 @@ export default function FeedPage() {
       console.log("[Feed] API_URL:", API_URL);
       console.log("[Feed] Request URL:", requestUrl);
 
-      const response = await fetch(requestUrl);
+      // เพิ่ม: ดึง Session ของผู้ใช้เพื่อส่ง Access Token
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      const response = await fetch(requestUrl, {
+        headers: session?.access_token
+          ? {
+              Authorization: `Bearer ${session.access_token}`,
+            }
+          : {},
+      });
 
       // อ่าน Response อย่างปลอดภัย เผื่อ Backend ส่ง HTML แทน JSON
       const responseText = await response.text();

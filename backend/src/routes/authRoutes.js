@@ -226,37 +226,42 @@ router.post("/register", async (req, res) => {
 
 // ======================================================
 // GET REVIEWS
-// ดึงรีวิวจาก Reviews และชื่อผู้รีวิวจาก User
+// ดึงรีวิว ชื่อผู้รีวิว จำนวนหัวใจ และสถานะหัวใจของผู้ใช้
+// ======================================================
+// ======================================================
+// GET REVIEWS
+// ดึงรีวิว ชื่อผู้รีวิว จำนวนหัวใจ และสถานะ Like / Save
 // ======================================================
 router.get("/reviews/test", async (req, res) => {
   try {
-    const { data: reviews, error: reviewsError } = await supabaseAdmin
-  .from("Reviews")
-  .select(`
-    ReviewsID,
-    UserID,
-    BooksID,
-    Book_Title,
-    Main_Category,
-    Sub_Category,
-    Review_Text,
-    Rating,
-    Image_URL,
-    Created_At
-  `)
-  .order("Created_At", { ascending: false });
+    const { data: reviews, error: reviewsError } =
+      await supabaseAdmin
+        .from("Reviews")
+        .select(`
+          ReviewsID,
+          UserID,
+          BooksID,
+          Book_Title,
+          Main_Category,
+          Sub_Category,
+          Review_Text,
+          Rating,
+          Image_URL,
+          Created_At
+        `)
+        .order("Created_At", { ascending: false });
 
-console.log("[REVIEW] Reviews query:", {
-  hasData: Boolean(reviews),
-  count: reviews?.length,
-  error: reviewsError?.message,
-  code: reviewsError?.code,
-  details: reviewsError?.details,
-});
+    console.log("[REVIEW] Reviews query:", {
+      hasData: Boolean(reviews),
+      count: reviews?.length,
+      error: reviewsError?.message,
+      code: reviewsError?.code,
+      details: reviewsError?.details,
+    });
 
-if (reviewsError) {
-  throw reviewsError;
-}
+    if (reviewsError) {
+      throw reviewsError;
+    }
 
     // หากยังไม่มีรีวิว ให้คืนอาร์เรย์ว่าง
     if (!reviews || reviews.length === 0) {
@@ -265,7 +270,6 @@ if (reviewsError) {
         reviews: [],
       });
     }
-
 
     // ดึง UserID ที่ไม่ซ้ำกัน
     const userIds = [
@@ -279,37 +283,153 @@ if (reviewsError) {
     let users = [];
 
     if (userIds.length > 0) {
-      const { data, error: usersError } = await supabaseAdmin
-  .from("User")
-  .select("UserID, User_Name")
-  .in("UserID", userIds);
+      const { data, error: usersError } =
+        await supabaseAdmin
+          .from("User")
+          .select("UserID, User_Name")
+          .in("UserID", userIds);
 
-console.log("[REVIEW] Users query:", {
-  hasData: Boolean(data),
-  count: data?.length,
-  error: usersError?.message,
-  code: usersError?.code,
-  details: usersError?.details,
-});
+      console.log("[REVIEW] Users query:", {
+        hasData: Boolean(data),
+        count: data?.length,
+        error: usersError?.message,
+        code: usersError?.code,
+        details: usersError?.details,
+      });
 
-if (usersError) {
-  throw usersError;
-}
+      if (usersError) {
+        throw usersError;
+      }
 
-users = data || [];
-
-      
+      users = data || [];
     }
 
     // จับคู่รีวิวกับชื่อผู้ใช้
     const userMap = new Map(
-      users.map((user) => [String(user.UserID), user.User_Name])
+      users.map((user) => [
+        String(user.UserID),
+        user.User_Name,
+      ])
     );
 
-    const formattedReviews = reviews.map((review) => ({
-      ...review,
-      User_Name: userMap.get(String(review.UserID)) || "ผู้ใช้",
-    }));
+    const reviewIds = reviews.map(
+      (review) => review.ReviewsID
+    );
+
+    // ======================================================
+    // ดึงจำนวนหัวใจของแต่ละรีวิว
+    // ======================================================
+    let likes = [];
+
+    if (reviewIds.length > 0) {
+      const { data, error: likesError } =
+        await supabaseAdmin
+          .from("Review_Likes")
+          .select("ReviewsID, UserID")
+          .in("ReviewsID", reviewIds);
+
+      if (likesError) {
+        throw likesError;
+      }
+
+      likes = data || [];
+    }
+
+    const likeCountMap = new Map();
+
+    for (const like of likes) {
+      const reviewKey = String(like.ReviewsID);
+
+      likeCountMap.set(
+        reviewKey,
+        (likeCountMap.get(reviewKey) || 0) + 1
+      );
+    }
+
+    // ======================================================
+    // ตรวจสอบผู้ใช้ปัจจุบันจาก Access Token
+    // ======================================================
+    let currentUserId = null;
+
+    const authHeader = req.headers.authorization;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      const accessToken = authHeader.split(" ")[1];
+
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser(accessToken);
+
+      if (!authError && authData?.user) {
+        const { data: profile, error: profileError } =
+          await supabaseAdmin
+            .from("User")
+            .select("UserID")
+            .eq("auth_user_id", authData.user.id)
+            .maybeSingle();
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        currentUserId = profile?.UserID ?? null;
+      }
+    }
+
+    // ======================================================
+    // ตรวจสอบรีวิวที่ผู้ใช้กด Like ไว้
+    // ======================================================
+    const likedReviewIds = new Set();
+
+    if (currentUserId !== null) {
+      for (const like of likes) {
+        if (
+          String(like.UserID) === String(currentUserId)
+        ) {
+          likedReviewIds.add(String(like.ReviewsID));
+        }
+      }
+    }
+
+    // ======================================================
+    // เพิ่ม: ตรวจสอบรีวิวที่ผู้ใช้ Save ไว้
+    // ======================================================
+    const savedReviewIds = new Set();
+
+    if (
+      currentUserId !== null &&
+      reviewIds.length > 0
+    ) {
+      const { data: savedRows, error: savedError } =
+        await supabaseAdmin
+          .from("Saved_Reviews")
+          .select("ReviewsID")
+          .eq("UserID", currentUserId)
+          .in("ReviewsID", reviewIds);
+
+      if (savedError) {
+        throw savedError;
+      }
+
+      for (const item of savedRows || []) {
+        savedReviewIds.add(String(item.ReviewsID));
+      }
+    }
+
+    // ======================================================
+    // รวมข้อมูลรีวิว ชื่อผู้ใช้ Like และ Save
+    // ======================================================
+    const formattedReviews = reviews.map((review) => {
+      const reviewKey = String(review.ReviewsID);
+
+      return {
+        ...review,
+        User_Name:
+          userMap.get(String(review.UserID)) || "ผู้ใช้",
+        Like_Count: likeCountMap.get(reviewKey) || 0,
+        Liked_By_Me: likedReviewIds.has(reviewKey),
+        Saved_By_Me: savedReviewIds.has(reviewKey),
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -325,7 +445,6 @@ users = data || [];
     });
   }
 });
-
 // ======================================================
 // POST REVIEW
 // บันทึกรีวิวลง Reviews โดยใช้ UserID จากตาราง User
@@ -483,7 +602,397 @@ router.post("/sync-profile", async (req, res) => {
 });
 
 // ======================================================
-// EXPORT ROUTER
-// ต้องมี export default เพียงครั้งเดียว
+// LIKE / UNLIKE REVIEW
+// ผู้ใช้หนึ่งคนกดใจรีวิวเดียวกันได้หนึ่งครั้ง
 // ======================================================
+router.post("/reviews/:reviewId/like", async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+
+    if (!/^\d+$/.test(reviewId)) {
+      return res.status(400).json({
+        success: false,
+        message: "รหัสรีวิวไม่ถูกต้อง",
+      });
+    }
+
+    // ตรวจสอบ Access Token
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบก่อนกดใจ",
+      });
+    }
+
+    const accessToken = authHeader.split(" ")[1];
+
+    // ตรวจสอบผู้ใช้กับ Supabase Auth
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser(accessToken);
+
+    if (authError || !authData?.user) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบใหม่",
+      });
+    }
+
+    // ค้นหาข้อมูลผู้ใช้ในตาราง User
+    const userProfile = await getOrCreateUserProfile(
+      authData.user
+    );
+
+    // ตรวจสอบว่ามีรีวิวนี้อยู่จริงหรือไม่
+    const { data: existingReview, error: reviewError } =
+      await supabaseAdmin
+        .from("Reviews")
+        .select("ReviewsID")
+        .eq("ReviewsID", reviewId)
+        .maybeSingle();
+
+    if (reviewError) {
+      throw reviewError;
+    }
+
+    if (!existingReview) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบรีวิวนี้",
+      });
+    }
+
+    // ตรวจสอบว่าผู้ใช้เคยกดใจรีวิวนี้หรือยัง
+    const { data: existingLike, error: likeCheckError } =
+      await supabaseAdmin
+        .from("Review_Likes")
+        .select("ReviewsID, UserID")
+        .eq("ReviewsID", reviewId)
+        .eq("UserID", userProfile.UserID)
+        .maybeSingle();
+
+    if (likeCheckError) {
+      throw likeCheckError;
+    }
+
+    let liked;
+
+    if (existingLike) {
+      // เคยกดใจแล้ว: ลบหัวใจเพื่อยกเลิก
+      const { error: deleteError } = await supabaseAdmin
+        .from("Review_Likes")
+        .delete()
+        .eq("ReviewsID", reviewId)
+        .eq("UserID", userProfile.UserID);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      liked = false;
+    } else {
+      // ยังไม่เคยกดใจ: เพิ่มหัวใจ
+      const { error: insertError } = await supabaseAdmin
+        .from("Review_Likes")
+        .insert({
+          ReviewsID: reviewId,
+          UserID: userProfile.UserID,
+        });
+
+      // ป้องกันข้อมูลซ้ำจากการกดพร้อมกัน
+      if (insertError && insertError.code !== "23505") {
+        throw insertError;
+      }
+
+      liked = true;
+    }
+
+    // นับจำนวนหัวใจใหม่จากฐานข้อมูล
+    const { count, error: countError } = await supabaseAdmin
+      .from("Review_Likes")
+      .select("ReviewsID", {
+        count: "exact",
+        head: true,
+      })
+      .eq("ReviewsID", reviewId);
+
+    if (countError) {
+      throw countError;
+    }
+
+    return res.status(200).json({
+      success: true,
+      liked,
+      likeCount: count || 0,
+    });
+  } catch (error) {
+    console.error("[REVIEW LIKE] Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "ไม่สามารถกดใจรีวิวได้",
+      error: error.message,
+    });
+  }
+});
+// ======================================================
+// SAVE / UNSAVE REVIEW
+// ======================================================
+router.post("/reviews/:reviewId/save", async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+
+    if (!/^\d+$/.test(reviewId)) {
+      return res.status(400).json({
+        success: false,
+        message: "รหัสรีวิวไม่ถูกต้อง",
+      });
+    }
+
+    // ตรวจสอบ Access Token
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบก่อนบันทึกรีวิว",
+      });
+    }
+
+    const accessToken = authHeader.split(" ")[1];
+
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser(accessToken);
+
+    if (authError || !authData?.user) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบใหม่",
+      });
+    }
+
+    // ค้นหาผู้ใช้ในตาราง User
+    const userProfile = await getOrCreateUserProfile(
+      authData.user
+    );
+
+    // ตรวจสอบว่ารีวิวมีอยู่จริง
+    const { data: review, error: reviewError } =
+      await supabaseAdmin
+        .from("Reviews")
+        .select("ReviewsID")
+        .eq("ReviewsID", reviewId)
+        .maybeSingle();
+
+    if (reviewError) throw reviewError;
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบรีวิวนี้",
+      });
+    }
+
+    // ตรวจสอบว่าผู้ใช้บันทึกรีวิวนี้ไว้แล้วหรือยัง
+    const { data: existingSave, error: saveCheckError } =
+      await supabaseAdmin
+        .from("Saved_Reviews")
+        .select("ReviewsID")
+        .eq("ReviewsID", reviewId)
+        .eq("UserID", userProfile.UserID)
+        .maybeSingle();
+
+    if (saveCheckError) throw saveCheckError;
+
+    let saved;
+
+    if (existingSave) {
+      // ถ้าบันทึกไว้แล้ว ให้ยกเลิกการบันทึก
+      const { error: deleteError } = await supabaseAdmin
+        .from("Saved_Reviews")
+        .delete()
+        .eq("ReviewsID", reviewId)
+        .eq("UserID", userProfile.UserID);
+
+      if (deleteError) throw deleteError;
+
+      saved = false;
+    } else {
+      // ถ้ายังไม่เคยบันทึก ให้เพิ่มลง Saved_Reviews
+      const { error: insertError } = await supabaseAdmin
+        .from("Saved_Reviews")
+        .insert({
+          ReviewsID: reviewId,
+          UserID: userProfile.UserID,
+        });
+
+      if (insertError) {
+        // รองรับกรณีที่มีการบันทึกรายการซ้ำพร้อมกัน
+        if (insertError.code !== "23505") {
+          throw insertError;
+        }
+      }
+
+      saved = true;
+    }
+
+    return res.status(200).json({
+      success: true,
+      saved,
+      message: saved
+        ? "บันทึกรีวิวแล้ว"
+        : "ยกเลิกการบันทึกแล้ว",
+    });
+  } catch (error) {
+    console.error("[SAVE REVIEW] Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "ไม่สามารถบันทึกรีวิวได้",
+      error: error.message,
+    });
+  }
+});
+// ======================================================
+// GET SAVED REVIEWS
+// ดึงรีวิวที่ผู้ใช้บันทึกไว้
+// ======================================================
+router.get("/saved-reviews", async (req, res) => {
+  try {
+    // ตรวจสอบ Access Token
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบเพื่อดู Saved Books",
+      });
+    }
+
+    const accessToken = authHeader.split(" ")[1];
+
+    const { data: authData, error: authError } =
+      await supabase.auth.getUser(accessToken);
+
+    if (authError || !authData?.user) {
+      return res.status(401).json({
+        success: false,
+        message: "กรุณาเข้าสู่ระบบใหม่",
+      });
+    }
+
+    // ค้นหาผู้ใช้ในตาราง User
+    const userProfile = await getOrCreateUserProfile(
+      authData.user
+    );
+
+    // ดึงรายการรีวิวที่ผู้ใช้บันทึกไว้
+    const { data: savedRows, error: savedError } =
+      await supabaseAdmin
+        .from("Saved_Reviews")
+        .select("ReviewsID, Created_At")
+        .eq("UserID", userProfile.UserID)
+        .order("Created_At", { ascending: false });
+
+    if (savedError) throw savedError;
+
+    // ยังไม่มีรายการที่บันทึกไว้
+    if (!savedRows || savedRows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        reviews: [],
+      });
+    }
+
+    // ดึงข้อมูลรีวิว
+    const reviewIds = savedRows.map(
+      (item) => item.ReviewsID
+    );
+
+    const { data: reviews, error: reviewsError } =
+      await supabaseAdmin
+        .from("Reviews")
+        .select(`
+          ReviewsID,
+          UserID,
+          BooksID,
+          Book_Title,
+          Main_Category,
+          Sub_Category,
+          Review_Text,
+          Rating,
+          Image_URL,
+          Created_At
+        `)
+        .in("ReviewsID", reviewIds);
+
+    if (reviewsError) throw reviewsError;
+
+    // ดึงชื่อผู้เขียนรีวิว
+    const userIds = [
+      ...new Set((reviews || []).map((item) => item.UserID)),
+    ];
+
+    let users = [];
+
+    if (userIds.length > 0) {
+      const { data, error: usersError } =
+        await supabaseAdmin
+          .from("User")
+          .select("UserID, User_Name")
+          .in("UserID", userIds);
+
+      if (usersError) throw usersError;
+
+      users = data || [];
+    }
+
+    const userMap = new Map(
+      users.map((user) => [
+        String(user.UserID),
+        user.User_Name,
+      ])
+    );
+
+    const reviewMap = new Map(
+      (reviews || []).map((review) => [
+        String(review.ReviewsID),
+        review,
+      ])
+    );
+
+    // เรียงตามวันที่บันทึก และเพิ่มชื่อผู้รีวิว
+    const formattedReviews = savedRows
+      .map((saved) => {
+        const review = reviewMap.get(
+          String(saved.ReviewsID)
+        );
+
+        if (!review) return null;
+
+        return {
+          ...review,
+          User_Name:
+            userMap.get(String(review.UserID)) || "ผู้ใช้",
+          Saved_At: saved.Created_At,
+          Saved_By_Me: true,
+        };
+      })
+      .filter(Boolean);
+
+    return res.status(200).json({
+      success: true,
+      reviews: formattedReviews,
+    });
+  } catch (error) {
+    console.error("[SAVED REVIEWS] Fetch error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "ไม่สามารถโหลด Saved Books ได้",
+      error: error.message,
+    });
+  }
+});
 export default router;

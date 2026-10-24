@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
   Bookmark,
@@ -18,39 +17,16 @@ import {
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { supabase } from "../lib/supabase";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "") + "/api/auth";
 
 const initialLibrary = {
   wantToRead: [...viralBooks],
   wantToBuy: savedBooks.slice(0, 2),
-
-  savedBooks: [
-    {
-      book: savedBooks[2],
-      review: {
-        id: 1,
-        username: "Emma",
-        bookTitle: savedBooks[2].title,
-        mainCategory: savedBooks[2].tags[0],
-        subCategory: savedBooks[2].tags[1],
-        rating: 5,
-        reviewText:
-          "This book was an amazing read! Highly recommended.",
-      },
-    },
-    {
-      book: savedBooks[3],
-      review: {
-        id: 2,
-        username: "John Doe",
-        bookTitle: savedBooks[3].title,
-        mainCategory: savedBooks[3].tags[0],
-        subCategory: savedBooks[3].tags[1],
-        rating: 4,
-        reviewText:
-          "A lovely story with interesting characters.",
-      },
-    },
-  ],
+  savedBooks: [],
 };
 
 const tabs = [
@@ -75,11 +51,217 @@ export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState("savedBooks");
   const [library, setLibrary] = useState(initialLibrary);
 
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [savedError, setSavedError] = useState("");
+
+  // ======================================================
+  // โหลด Saved Books จาก Backend
+  // ======================================================
+  const loadSavedBooks = useCallback(async () => {
+    try {
+      setSavedLoading(true);
+      setSavedError("");
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!session?.access_token) {
+        setLibrary((prev) => ({
+          ...prev,
+          savedBooks: [],
+        }));
+
+        setSavedError(
+          "กรุณาเข้าสู่ระบบเพื่อดู Saved Books"
+        );
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL}/saved-reviews`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || result.success === false) {
+        throw new Error(
+          result.message || "โหลด Saved Books ไม่สำเร็จ"
+        );
+      }
+
+      // แปลงข้อมูลรีวิวให้เข้ากับ Savebookfrom
+      const entries = (
+        Array.isArray(result.reviews) ? result.reviews : []
+      ).map((item) => {
+        const title = item.Book_Title || "Untitled book";
+        const imageUrl = item.Image_URL || "";
+        const tags = [
+          item.Main_Category,
+          item.Sub_Category,
+        ].filter(Boolean);
+
+        return {
+          book: {
+            id: `review-${item.ReviewsID}`,
+            title,
+            tags,
+            cover: imageUrl,
+            image: imageUrl,
+            imageUrl,
+            Books_Cover: imageUrl,
+          },
+
+          review: {
+            id: item.ReviewsID,
+            username: item.User_Name || "Reader",
+            bookTitle: title,
+            mainCategory: item.Main_Category || "",
+            subCategory: item.Sub_Category || "",
+            rating: Number(item.Rating) || 0,
+            reviewText: item.Review_Text || "",
+            imageUrl: imageUrl || null,
+            Created_At: item.Created_At,
+          },
+        };
+      });
+
+      setLibrary((prev) => ({
+        ...prev,
+        savedBooks: entries,
+      }));
+
+      console.log(
+        "[Library] Saved Books loaded:",
+        entries.length
+      );
+    } catch (error) {
+      console.error(
+        "[Library] Load Saved Books error:",
+        error
+      );
+
+      setSavedError(
+        error.message || "โหลด Saved Books ไม่สำเร็จ"
+      );
+    } finally {
+      setSavedLoading(false);
+    }
+  }, []);
+
+  // โหลดรายการเมื่อเปิดหน้า Library
+  useEffect(() => {
+    loadSavedBooks();
+  }, [loadSavedBooks]);
+
+  // ตรวจสอบว่าเป็นรีวิวที่มาจากระบบ Save หรือไม่
+  const isSavedReview = (book) =>
+    String(book?.id ?? "").startsWith("review-");
+
+  // ======================================================
+  // ยกเลิกการบันทึกรีวิวใน Supabase
+  // ======================================================
+  const unsaveReviewOnServer = async (book) => {
+    if (!isSavedReview(book)) {
+      return;
+    }
+
+    const reviewId = String(book.id).slice("review-".length);
+
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    if (!session?.access_token) {
+      throw new Error("กรุณาเข้าสู่ระบบใหม่");
+    }
+
+    const response = await fetch(
+      `${API_URL}/reviews/${reviewId}/save`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.success === false) {
+      throw new Error(
+        result.message || "ยกเลิกการบันทึกไม่สำเร็จ"
+      );
+    }
+
+    if (result.saved !== false) {
+      throw new Error("ไม่สามารถยกเลิกการบันทึกได้");
+    }
+  };
+
   const sameBook = (a, b) => a.id === b.id;
 
-  const moveBook = (book, targetTab) => {
-    setLibrary((prev) => {
-      const next = {
+  // ======================================================
+  // ย้ายหนังสือระหว่างแท็บ
+  // ======================================================
+  const moveBook = async (book, targetTab) => {
+    try {
+      // ถ้าเป็นรีวิวที่บันทึกจาก Feed ให้ยกเลิก Save ในฐานข้อมูลก่อน
+      await unsaveReviewOnServer(book);
+
+      setLibrary((prev) => {
+        const next = {
+          wantToRead: prev.wantToRead.filter(
+            (item) => !sameBook(item, book)
+          ),
+          wantToBuy: prev.wantToBuy.filter(
+            (item) => !sameBook(item, book)
+          ),
+          savedBooks: prev.savedBooks.filter(
+            (entry) => !sameBook(entry.book, book)
+          ),
+        };
+
+        if (targetTab === "wantToBuy") {
+          next.wantToBuy.push(book);
+        }
+
+        if (targetTab === "wantToRead") {
+          next.wantToRead.push(book);
+        }
+
+        return next;
+      });
+    } catch (error) {
+      console.error("[Library] Move book error:", error);
+      alert(error.message || "ย้ายหนังสือไม่สำเร็จ");
+    }
+  };
+
+  // ======================================================
+  // นำหนังสือออก
+  // ======================================================
+  const removeBook = async (book) => {
+    try {
+      // ถ้าเป็นรีวิวที่บันทึกจาก Feed ให้ลบจากฐานข้อมูลด้วย
+      await unsaveReviewOnServer(book);
+
+      setLibrary((prev) => ({
         wantToRead: prev.wantToRead.filter(
           (item) => !sameBook(item, book)
         ),
@@ -89,32 +271,11 @@ export default function LibraryPage() {
         savedBooks: prev.savedBooks.filter(
           (entry) => !sameBook(entry.book, book)
         ),
-      };
-
-      if (targetTab === "wantToBuy") {
-        next.wantToBuy.push(book);
-      }
-
-      if (targetTab === "wantToRead") {
-        next.wantToRead.push(book);
-      }
-
-      return next;
-    });
-  };
-
-  const removeBook = (book) => {
-    setLibrary((prev) => ({
-      wantToRead: prev.wantToRead.filter(
-        (item) => !sameBook(item, book)
-      ),
-      wantToBuy: prev.wantToBuy.filter(
-        (item) => !sameBook(item, book)
-      ),
-      savedBooks: prev.savedBooks.filter(
-        (entry) => !sameBook(entry.book, book)
-      ),
-    }));
+      }));
+    } catch (error) {
+      console.error("[Library] Remove book error:", error);
+      alert(error.message || "นำหนังสือออกไม่สำเร็จ");
+    }
   };
 
   const markAsRead = (book) => {
@@ -128,7 +289,7 @@ export default function LibraryPage() {
       className="
         mx-auto w-full max-w-5xl
         min-w-0 px-3 pt-4
-        pb-[calc(110px+env(safe-area-inset-bottom))]
+        pb-[calc(110px+env(safe-area-inset-bottom)]
         sm:px-5 sm:pt-6
         lg:pb-10
       "
@@ -139,6 +300,7 @@ export default function LibraryPage() {
           <h1 className="text-2xl font-bold sm:text-3xl">
             Library
           </h1>
+
           <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
             จัดการหนังสือที่คุณบันทึกไว้
           </p>
@@ -176,9 +338,11 @@ export default function LibraryPage() {
               `}
             >
               <Icon className="h-4 w-4 shrink-0" />
+
               <span className="text-center">
                 {tab.label}
               </span>
+
               <span>({library[tab.value].length})</span>
             </Button>
           );
@@ -186,7 +350,25 @@ export default function LibraryPage() {
       </div>
 
       {/* Book Grid */}
-      {currentItems.length === 0 ? (
+      {activeTab === "savedBooks" && savedLoading ? (
+        <div className="flex min-h-60 items-center justify-center rounded-2xl border border-dashed bg-white/70 p-6">
+          <p className="text-sm text-muted-foreground">
+            กำลังโหลด Saved Books...
+          </p>
+        </div>
+      ) : activeTab === "savedBooks" && savedError ? (
+        <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
+          <p className="text-sm text-red-600">{savedError}</p>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={loadSavedBooks}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : currentItems.length === 0 ? (
         <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
           <BookOpen className="h-9 w-9 text-muted-foreground" />
 
