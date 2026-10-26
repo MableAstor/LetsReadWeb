@@ -1,7 +1,8 @@
 
-import { Bookmark, BookOpen } from "lucide-react";
+import { Bookmark, BookOpen, Trash2 } from "lucide-react";
 
 import ReviewCard from "./ReviewCard";
+import { Button } from "./ui/button";
 
 import {
   Dialog,
@@ -15,7 +16,18 @@ export default function SaveBookModel({
   open = false,
   onClose,
   review,
+  book,
+  onRemove,
 }) {
+  const handleRemove = async () => {
+    if (!book || typeof onRemove !== "function") {
+      return;
+    }
+
+    await onRemove(book);
+    onClose?.();
+  };
+
   return (
     <Dialog
       open={open}
@@ -80,6 +92,20 @@ export default function SaveBookModel({
             </div>
           )}
         </div>
+
+        {/* ปุ่มนำรีวิวออกจาก Saved Books */}
+        {review && book && (
+          <div className="mt-4 flex justify-end border-t pt-4">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRemove}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remove from Saved
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

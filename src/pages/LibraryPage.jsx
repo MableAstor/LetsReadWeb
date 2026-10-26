@@ -19,6 +19,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { supabase } from "../lib/supabase";
 
+// แก้รูปแบบ API_URL ให้เป็น URL ปกติ
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
@@ -77,20 +78,15 @@ export default function LibraryPage() {
           savedBooks: [],
         }));
 
-        setSavedError(
-          "กรุณาเข้าสู่ระบบเพื่อดู Saved Books"
-        );
+        setSavedError("กรุณาเข้าสู่ระบบเพื่อดู Saved Books");
         return;
       }
 
-      const response = await fetch(
-        `${API_URL}/saved-reviews`,
-        {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/saved-reviews`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
       const result = await response.json().catch(() => ({}));
 
@@ -106,6 +102,7 @@ export default function LibraryPage() {
       ).map((item) => {
         const title = item.Book_Title || "Untitled book";
         const imageUrl = item.Image_URL || "";
+
         const tags = [
           item.Main_Category,
           item.Sub_Category,
@@ -123,6 +120,11 @@ export default function LibraryPage() {
           },
 
           review: {
+            // คงข้อมูลต้นฉบับจาก Backend
+            // เพื่อให้ ReviewCard แสดงรายละเอียดรีวิวได้ครบ
+            ...item,
+
+            // ข้อมูลที่ Savebookfrom ใช้งาน
             id: item.ReviewsID,
             username: item.User_Name || "Reader",
             bookTitle: title,
@@ -131,7 +133,7 @@ export default function LibraryPage() {
             rating: Number(item.Rating) || 0,
             reviewText: item.Review_Text || "",
             imageUrl: imageUrl || null,
-            Created_At: item.Created_At,
+            Saved_By_Me: true,
           },
         };
       });
@@ -169,7 +171,7 @@ export default function LibraryPage() {
     String(book?.id ?? "").startsWith("review-");
 
   // ======================================================
-  // ยกเลิกการบันทึกรีวิวใน Supabase
+  // ยกเลิกการบันทึกรีวิวใน Backend
   // ======================================================
   const unsaveReviewOnServer = async (book) => {
     if (!isSavedReview(book)) {
@@ -209,19 +211,21 @@ export default function LibraryPage() {
       );
     }
 
+    // ตรวจสอบว่า Backend ยกเลิก Save สำเร็จจริง
     if (result.saved !== false) {
       throw new Error("ไม่สามารถยกเลิกการบันทึกได้");
     }
   };
 
-  const sameBook = (a, b) => a.id === b.id;
+  const sameBook = (a, b) =>
+    String(a?.id) === String(b?.id);
 
   // ======================================================
   // ย้ายหนังสือระหว่างแท็บ
   // ======================================================
   const moveBook = async (book, targetTab) => {
     try {
-      // ถ้าเป็นรีวิวที่บันทึกจาก Feed ให้ยกเลิก Save ในฐานข้อมูลก่อน
+      // ถ้าเป็นรีวิวที่บันทึกจาก Feed ให้ยกเลิก Save ก่อน
       await unsaveReviewOnServer(book);
 
       setLibrary((prev) => {
@@ -249,32 +253,63 @@ export default function LibraryPage() {
       });
     } catch (error) {
       console.error("[Library] Move book error:", error);
-      alert(error.message || "ย้ายหนังสือไม่สำเร็จ");
+      window.alert(error.message || "ย้ายหนังสือไม่สำเร็จ");
     }
   };
 
   // ======================================================
-  // นำหนังสือออก
+  // นำหนังสือออกจากรายการ
   // ======================================================
-  const removeBook = async (book) => {
-    try {
-      // ถ้าเป็นรีวิวที่บันทึกจาก Feed ให้ลบจากฐานข้อมูลด้วย
-      await unsaveReviewOnServer(book);
+  const removeBook = async (listName, book) => {
+    console.log("[Library] Remove clicked:", listName, book);
 
-      setLibrary((prev) => ({
-        wantToRead: prev.wantToRead.filter(
-          (item) => !sameBook(item, book)
-        ),
-        wantToBuy: prev.wantToBuy.filter(
-          (item) => !sameBook(item, book)
-        ),
-        savedBooks: prev.savedBooks.filter(
-          (entry) => !sameBook(entry.book, book)
-        ),
-      }));
+    if (!book?.id) {
+      console.error(
+        "[Library] ไม่พบ ID ของหนังสือที่ต้องการลบ",
+        book
+      );
+      window.alert("ไม่พบข้อมูลรีวิวที่ต้องการลบ");
+      return;
+    }
+
+    // เก็บรายการเดิมไว้ เผื่อต้องคืนค่าหาก Backend ลบไม่สำเร็จ
+    const previousItems = library[listName] ?? [];
+
+    // นำรายการออกจากหน้าจอทันที
+    setLibrary((prev) => ({
+      ...prev,
+      [listName]: (prev[listName] ?? []).filter((item) => {
+        const actualBook = item?.book ?? item;
+
+        return (
+          String(actualBook?.id ?? "") !== String(book.id)
+        );
+      }),
+    }));
+
+    try {
+      // ยกเลิก Save ในฐานข้อมูลเมื่ออยู่ใน Saved Books
+      if (listName === "savedBooks") {
+        await unsaveReviewOnServer(book);
+      }
+
+      console.log(
+        "[Library] Remove successful:",
+        book.id
+      );
     } catch (error) {
-      console.error("[Library] Remove book error:", error);
-      alert(error.message || "นำหนังสือออกไม่สำเร็จ");
+      console.error("[Library] Remove failed:", error);
+
+      // หากลบใน Backend ไม่สำเร็จ ให้คืนรายการกลับมา
+      setLibrary((prev) => ({
+        ...prev,
+        [listName]: previousItems,
+      }));
+
+      window.alert(
+        error.message ||
+          "นำรีวิวออกจาก Saved Books ไม่สำเร็จ กรุณาลองใหม่"
+      );
     }
   };
 
@@ -289,7 +324,7 @@ export default function LibraryPage() {
       className="
         mx-auto w-full max-w-5xl
         min-w-0 px-3 pt-4
-        pb-[calc(110px+env(safe-area-inset-bottom)]
+        pb-[calc(110px+env(safe-area-inset-bottom))]
         sm:px-5 sm:pt-6
         lg:pb-10
       "
@@ -358,7 +393,9 @@ export default function LibraryPage() {
         </div>
       ) : activeTab === "savedBooks" && savedError ? (
         <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
-          <p className="text-sm text-red-600">{savedError}</p>
+          <p className="text-sm text-red-600">
+            {savedError}
+          </p>
 
           <Button
             type="button"
@@ -397,7 +434,9 @@ export default function LibraryPage() {
                   moveBook(book, "wantToBuy")
                 }
                 onMarkAsRead={markAsRead}
-                onRemove={removeBook}
+                onRemove={(book) =>
+                  removeBook("savedBooks", book)
+                }
               />
             ))}
 
@@ -410,7 +449,7 @@ export default function LibraryPage() {
                   moveBook(item, "wantToBuy")
                 }
                 onMarkAsRead={markAsRead}
-                onRemove={removeBook}
+                onRemove={(book) => removeBook("wantToRead", book)}
               />
             ))}
 
