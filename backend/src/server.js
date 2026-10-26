@@ -3,7 +3,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
-
+import feedRoutes from "./routes/feedRoutes.js";
+import libraryRoutes from "./routes/libraryRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -38,7 +39,8 @@ app.use(
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
-
+app.use("/api/auth", feedRoutes);
+app.use("/api/auth", libraryRoutes);
 app.get("/", (req, res) => {
   res.json({
     message: "Let's Read Backend is running",
