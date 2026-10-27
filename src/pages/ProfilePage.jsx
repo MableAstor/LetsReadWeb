@@ -1,10 +1,8 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   UserRound,
   BookOpen,
-  Palette,
   Bell,
   ShieldCheck,
   Info,
@@ -24,12 +22,6 @@ const settingItems = [
     description: "ปรับความสนใจและหมวดหนังสือ",
     path: "/settings/reading",
     Icon: BookOpen,
-  },
-  {
-    title: "ธีมและการแสดงผล",
-    description: "ตั้งค่าธีมและขนาดตัวอักษร",
-    path: "/settings/appearance",
-    Icon: Palette,
   },
   {
     title: "การแจ้งเตือน",

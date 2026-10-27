@@ -3,11 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   BookOpen,
-  Check,
   LockKeyhole,
   LogOut,
-  Moon,
-  Sun,
   UserRound,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -21,13 +18,6 @@ import { Switch } from "../components/ui/switch";
 import { Separator } from "../components/ui/separator";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -37,8 +27,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const mainCategories = [
   "รักโรแมนติก",
@@ -59,7 +47,6 @@ const pageInfo = {
     "การตั้งค่าการอ่าน",
     "เลือกหมวดหนังสือที่สนใจ เพื่อเตรียมใช้กับระบบแนะนำ",
   ],
-  "/settings/appearance": ["ธีมและการแสดงผล", "ปรับธีมและรูปแบบตัวอักษร"],
   "/settings/notifications": [
     "การแจ้งเตือน",
     "เลือกรูปแบบการแจ้งเตือนที่ต้องการ",
@@ -114,14 +101,6 @@ export default function SettingsPage() {
     const saved = readSaved("letsread-interests", []);
     return Array.isArray(saved) ? saved : [];
   });
-  
-  // ใช้ค่า string ปกติป้องกัน double quotes
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("letsread-theme") || "light";
-  });
-  const [fontSize, setFontSize] = useState(() => {
-    return localStorage.getItem("letsread-font-size") || "normal";
-  });
 
   const [notifications, setNotifications] = useState(() => ({
     reviews: true,
@@ -154,61 +133,6 @@ export default function SettingsPage() {
       mounted = false;
     };
   }, []);
-
-  // ฟังก์ชันยิงอัปเดตการตั้งค่าไปยัง Backend
-  const saveAppearanceToBackend = async (newTheme, newFontSize) => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) return;
-
-      await fetch(`${API_BASE_URL}/settings/appearance`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          theme: newTheme,
-          fontSize: newFontSize,
-        }),
-      });
-    } catch (err) {
-      console.error("Failed to sync appearance with backend:", err);
-    }
-  };
-
-  // จัดการ Theme พร้อมแสดงผลทันทีและเซฟลง LocalStorage + Backend
-  const handleThemeChange = (newTheme) => {
-    setTheme(newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-    localStorage.setItem("letsread-theme", newTheme);
-    saveAppearanceToBackend(newTheme, fontSize);
-  };
-
-  // จัดการ Font Size พร้อมแสดงผลทันทีและเซฟลง LocalStorage + Backend
-  const handleFontSizeChange = (newSize) => {
-    setFontSize(newSize);
-    document.documentElement.classList.remove(
-      "font-size-small",
-      "font-size-normal",
-      "font-size-large"
-    );
-    document.documentElement.classList.add(`font-size-${newSize}`);
-    localStorage.setItem("letsread-font-size", newSize);
-    saveAppearanceToBackend(theme, newSize);
-  };
-
-  // Sync Class กับ DOM เริ่มต้น
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    document.documentElement.classList.remove(
-      "font-size-small",
-      "font-size-normal",
-      "font-size-large"
-    );
-    document.documentElement.classList.add(`font-size-${fontSize}`);
-  }, [theme, fontSize]);
 
   const toggleInterest = (category) => {
     if (interests.includes(category)) {
@@ -354,52 +278,6 @@ export default function SettingsPage() {
             ตอนนี้บันทึกใน localStorage เท่านั้น ยังไม่อัปเดต User Preference
             Vector หรือคะแนนแนะนำของ Backend
           </p>
-        </section>
-      )}
-
-      {pathname === "/settings/appearance" && (
-        <section className="space-y-6">
-          <div className="space-y-3">
-            <Label className="font-semibold">ธีมเว็บไซต์</Label>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: "light", label: "สว่าง", Icon: Sun },
-                { value: "dark", label: "มืด", Icon: Moon },
-              ].map(({ value, label, Icon }) => (
-                <Button
-                  key={value}
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleThemeChange(value)}
-                  aria-pressed={theme === value}
-                  className={`h-14 min-w-0 rounded-xl text-sm ${theme === value ? "border-[#B66D57] bg-[#FFF0E9] text-[#925943]" : ""}`}
-                >
-                  <Icon className="size-4" /> {label}{" "}
-                  {theme === value && <Check className="size-4" />}
-                </Button>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Dark mode จะสลับสีหน้าต่าง ๆ ทันที
-            </p>
-          </div>
-          <Separator />
-          <div className="space-y-3">
-            <Label htmlFor="font-size">ขนาดตัวอักษร</Label>
-            <Select value={fontSize} onValueChange={handleFontSizeChange}>
-              <SelectTrigger id="font-size" className="w-full max-w-xs">
-                <SelectValue placeholder="เลือกขนาด" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="small">เล็ก</SelectItem>
-                <SelectItem value="normal">ปกติ</SelectItem>
-                <SelectItem value="large">ใหญ่</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              ขนาดตัวอักษรจะถูกปรับและบันทึกอัตโนมัติ
-            </p>
-          </div>
         </section>
       )}
 
