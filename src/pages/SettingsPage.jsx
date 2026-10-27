@@ -38,7 +38,8 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 
-// Must match the categories used by CategoryCard. Keep these labels centralized later.
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 const mainCategories = [
   "รักโรแมนติก",
   "แฟนตาซี",
@@ -113,12 +114,15 @@ export default function SettingsPage() {
     const saved = readSaved("letsread-interests", []);
     return Array.isArray(saved) ? saved : [];
   });
-  const [theme, setTheme] = useState(() =>
-    readSaved("letsread-theme", "light"),
-  );
-  const [fontSize, setFontSize] = useState(() =>
-    readSaved("letsread-font-size", "normal"),
-  );
+  
+  // ใช้ค่า string ปกติป้องกัน double quotes
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("letsread-theme") || "light";
+  });
+  const [fontSize, setFontSize] = useState(() => {
+    return localStorage.getItem("letsread-font-size") || "normal";
+  });
+
   const [notifications, setNotifications] = useState(() => ({
     reviews: true,
     rewards: true,
@@ -151,14 +155,60 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // Persist only local UI preferences; dark classes work only on screens that support them.
+  // ฟังก์ชันยิงอัปเดตการตั้งค่าไปยัง Backend
+  const saveAppearanceToBackend = async (newTheme, newFontSize) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+
+      await fetch(`${API_BASE_URL}/settings/appearance`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          theme: newTheme,
+          fontSize: newFontSize,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to sync appearance with backend:", err);
+    }
+  };
+
+  // จัดการ Theme พร้อมแสดงผลทันทีและเซฟลง LocalStorage + Backend
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+    localStorage.setItem("letsread-theme", newTheme);
+    saveAppearanceToBackend(newTheme, fontSize);
+  };
+
+  // จัดการ Font Size พร้อมแสดงผลทันทีและเซฟลง LocalStorage + Backend
+  const handleFontSizeChange = (newSize) => {
+    setFontSize(newSize);
+    document.documentElement.classList.remove(
+      "font-size-small",
+      "font-size-normal",
+      "font-size-large"
+    );
+    document.documentElement.classList.add(`font-size-${newSize}`);
+    localStorage.setItem("letsread-font-size", newSize);
+    saveAppearanceToBackend(theme, newSize);
+  };
+
+  // Sync Class กับ DOM เริ่มต้น
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("letsread-theme", JSON.stringify(theme));
-  }, [theme]);
-  useEffect(() => {
-    localStorage.setItem("letsread-font-size", JSON.stringify(fontSize));
-  }, [fontSize]);
+    document.documentElement.classList.remove(
+      "font-size-small",
+      "font-size-normal",
+      "font-size-large"
+    );
+    document.documentElement.classList.add(`font-size-${fontSize}`);
+  }, [theme, fontSize]);
 
   const toggleInterest = (category) => {
     if (interests.includes(category)) {
@@ -232,12 +282,9 @@ export default function SettingsPage() {
 
   const logout = async () => {
     setSaving(true);
-
     try {
       const { error } = await supabase.auth.signOut();
-
       if (error) throw error;
-
       setConfirmLogout(false);
       setUser(null);
       navigate("/", { replace: true });
@@ -323,7 +370,7 @@ export default function SettingsPage() {
                   key={value}
                   type="button"
                   variant="outline"
-                  onClick={() => setTheme(value)}
+                  onClick={() => handleThemeChange(value)}
                   aria-pressed={theme === value}
                   className={`h-14 min-w-0 rounded-xl text-sm ${theme === value ? "border-[#B66D57] bg-[#FFF0E9] text-[#925943]" : ""}`}
                 >
@@ -333,14 +380,13 @@ export default function SettingsPage() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              Dark mode ต้องมี dark: classes ในหน้าอื่น ๆ
-              จึงจะเปลี่ยนทั้งเว็บได้ครบ
+              Dark mode จะสลับสีหน้าต่าง ๆ ทันที
             </p>
           </div>
           <Separator />
           <div className="space-y-3">
             <Label htmlFor="font-size">ขนาดตัวอักษร</Label>
-            <Select value={fontSize} onValueChange={setFontSize}>
+            <Select value={fontSize} onValueChange={handleFontSizeChange}>
               <SelectTrigger id="font-size" className="w-full max-w-xs">
                 <SelectValue placeholder="เลือกขนาด" />
               </SelectTrigger>
@@ -351,8 +397,7 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              บันทึกขนาดตัวอักษรแล้ว แต่ต้องเชื่อมค่ากับ Layout
-              หลักก่อนจึงจะเปลี่ยนขนาดทั่วเว็บไซต์
+              ขนาดตัวอักษรจะถูกปรับและบันทึกอัตโนมัติ
             </p>
           </div>
         </section>
