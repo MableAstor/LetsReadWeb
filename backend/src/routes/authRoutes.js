@@ -223,6 +223,7 @@ router.post("/register", async (req, res) => {
     });
   }
 });
+
 // ======================================================
 // SYNC PROFILE
 // ซิงก์โปรไฟล์หลัง OAuth เช่น Google
@@ -250,9 +251,7 @@ router.post("/sync-profile", async (req, res) => {
       });
     }
 
-    const userProfile = await getOrCreateUserProfile(
-      authData.user
-    );
+    const userProfile = await getOrCreateUserProfile(authData.user);
 
     return res.status(200).json({
       success: true,
@@ -268,6 +267,7 @@ router.post("/sync-profile", async (req, res) => {
       error: error.message,
     });
   }
+
 });
 
 export default router;
