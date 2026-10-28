@@ -14,7 +14,7 @@ const settingItems = [
   {
     title: "โปรไฟล์ผู้ใช้",
     description: "จัดการชื่อและข้อมูลส่วนตัว",
-    path: "/settings/account",
+    path: "/settings/profile", // ✅ แก้ไขเป็น profile เพื่อตรงกับหน้าแก้ไขชื่อ
     Icon: UserRound,
   },
   {
@@ -32,7 +32,7 @@ const settingItems = [
   {
     title: "บัญชีและความปลอดภัย",
     description: "จัดการรหัสผ่านและออกจากระบบ",
-    path: "/settings/profile",
+    path: "/settings/account", // ✅ แก้ไขเป็น account เพื่อตรงกับหน้ารหัสผ่านและออกจากระบบ
     Icon: ShieldCheck,
   },
   {
@@ -66,6 +66,7 @@ export default function ProfilePage() {
   }, []);
 
   const username =
+    user?.user_metadata?.User_Name ||
     user?.user_metadata?.username ||
     user?.user_metadata?.full_name ||
     user?.email?.split("@")[0] ||

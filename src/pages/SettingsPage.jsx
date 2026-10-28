@@ -28,6 +28,8 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 const mainCategories = [
   "รักโรแมนติก",
   "แฟนตาซี",
@@ -114,21 +116,57 @@ export default function SettingsPage() {
     setMessageError(isError);
   };
 
+  // โหลดข้อมูลผู้ใช้และการตั้งค่าจาก Supabase และ Backend API
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(({ data, error }) => {
+
+    async function loadUserData() {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
       if (!mounted) return;
-      if (error) {
-        showMessage(`ไม่สามารถโหลดผู้ใช้ได้: ${error.message}`, true);
+
+      if (authErr || !authData?.user) {
+        if (authErr) showMessage(`ไม่สามารถโหลดผู้ใช้ได้: ${authErr.message}`, true);
         return;
       }
-      setUser(data.user ?? null);
+
+      setUser(authData.user);
       setUsername(
-        data.user?.user_metadata?.username ??
-          data.user?.user_metadata?.full_name ??
-          "",
+        authData.user?.user_metadata?.User_Name ||
+          authData.user?.user_metadata?.username ||
+          authData.user?.user_metadata?.full_name ||
+          ""
       );
-    });
+
+      // ดึง Preferences (หมวดที่สนใจ + แจ้งเตือน) จาก Backend
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+
+        const res = await fetch(`${API_BASE_URL}/settings/preferences`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.interests?.length > 0) {
+            setInterests(resData.interests);
+            localStorage.setItem("letsread-interests", JSON.stringify(resData.interests));
+          }
+          if (resData.notifications) {
+            setNotifications(resData.notifications);
+            localStorage.setItem("letsread-notifications", JSON.stringify(resData.notifications));
+          }
+        }
+      } catch (err) {
+        console.error("Preferences load error:", err);
+      }
+    }
+
+    loadUserData();
+
     return () => {
       mounted = false;
     };
@@ -148,34 +186,32 @@ export default function SettingsPage() {
     setMessage("");
   };
 
-  const saveReading = () => {
-    if (interests.length === 0)
+  // บันทึกหมวดหมู่หนังสือไปยัง Backend API
+  const saveReading = async () => {
+    if (interests.length === 0) {
       return showMessage("กรุณาเลือกอย่างน้อย 1 หมวด", true);
-    localStorage.setItem("letsread-interests", JSON.stringify(interests));
-    showMessage("บันทึกหมวดหนังสือในเบราว์เซอร์แล้ว");
-  };
+    }
 
-  const saveNotifications = () => {
-    localStorage.setItem(
-      "letsread-notifications",
-      JSON.stringify(notifications),
-    );
-    showMessage("บันทึกการตั้งค่าการแจ้งเตือนในเบราว์เซอร์แล้ว");
-  };
-
-  const saveProfile = async (event) => {
-    event.preventDefault();
-    if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
-    const clean = username.trim();
-    if (!clean) return showMessage("กรุณากรอกชื่อผู้ใช้", true);
     setSaving(true);
     try {
-      const { data, error } = await supabase.auth.updateUser({
-        data: { username: clean },
-      });
-      if (error) throw error;
-      setUser(data.user);
-      showMessage("บันทึกชื่อผู้ใช้ในบัญชีแล้ว");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (token) {
+        const res = await fetch(`${API_BASE_URL}/settings/reading`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ interests }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+      }
+
+      localStorage.setItem("letsread-interests", JSON.stringify(interests));
+      showMessage("บันทึกหมวดหนังสือเรียบร้อยแล้ว");
     } catch (error) {
       showMessage(error.message || "บันทึกไม่สำเร็จ", true);
     } finally {
@@ -183,6 +219,74 @@ export default function SettingsPage() {
     }
   };
 
+  // บันทึกการตั้งค่าการแจ้งเตือนไปยัง Backend API
+  const saveNotifications = async () => {
+    setSaving(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (token) {
+        const res = await fetch(`${API_BASE_URL}/settings/notifications`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ notifications }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+      }
+
+      localStorage.setItem("letsread-notifications", JSON.stringify(notifications));
+      showMessage("บันทึกการตั้งค่าการแจ้งเตือนเรียบร้อยแล้ว");
+    } catch (error) {
+      showMessage(error.message || "บันทึกไม่สำเร็จ", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // บันทึกชื่อผู้ใช้ทั้ง Supabase Auth และ Backend DB
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
+    const clean = username.trim();
+    if (!clean) return showMessage("กรุณากรอกชื่อผู้ใช้", true);
+
+    setSaving(true);
+    try {
+      // 1. อัปเดตใน Supabase Auth metadata
+      const { data, error } = await supabase.auth.updateUser({
+        data: { username: clean, User_Name: clean },
+      });
+      if (error) throw error;
+
+      // 2. ซิงก์ลงตาราง User ผ่าน Backend API
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        await fetch(`${API_BASE_URL}/profile`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ username: clean }),
+        });
+      }
+
+      setUser(data.user);
+      showMessage("บันทึกชื่อผู้ใช้เรียบร้อยแล้ว");
+    } catch (error) {
+      showMessage(error.message || "บันทึกไม่สำเร็จ", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // เปลี่ยนรหัสผ่านผ่าน Supabase Auth
   const changePassword = async (event) => {
     event.preventDefault();
     if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
@@ -190,6 +294,7 @@ export default function SettingsPage() {
       return showMessage("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร", true);
     if (password !== confirmPassword)
       return showMessage("ยืนยันรหัสผ่านไม่ตรงกัน", true);
+
     setSaving(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
@@ -204,6 +309,7 @@ export default function SettingsPage() {
     }
   };
 
+  // ออกจากระบบ
   const logout = async () => {
     setSaving(true);
     try {
@@ -227,12 +333,17 @@ export default function SettingsPage() {
       {message && (
         <Alert
           role="status"
-          className={`mb-5 ${messageError ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0E1DA] bg-[#FFF8F5] text-[#925943]"}`}
+          className={`mb-5 ${
+            messageError
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-[#F0E1DA] bg-[#FFF8F5] text-[#925943]"
+          }`}
         >
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
 
+      {/* หน้าการตั้งค่าการอ่าน */}
       {pathname === "/settings/reading" && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -254,7 +365,11 @@ export default function SettingsPage() {
               return (
                 <label
                   key={category}
-                  className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${selected ? "border-[#C78E88] bg-[#FFF4F0]" : "border-[#F0E1DA] hover:bg-[#FFF9F6]"}`}
+                  className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                    selected
+                      ? "border-[#C78E88] bg-[#FFF4F0]"
+                      : "border-[#F0E1DA] hover:bg-[#FFF9F6]"
+                  }`}
                 >
                   <Checkbox
                     checked={selected}
@@ -270,17 +385,15 @@ export default function SettingsPage() {
           </div>
           <Button
             onClick={saveReading}
+            disabled={saving}
             className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto"
           >
-            บันทึกการตั้งค่า
+            {saving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
           </Button>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            ตอนนี้บันทึกใน localStorage เท่านั้น ยังไม่อัปเดต User Preference
-            Vector หรือคะแนนแนะนำของ Backend
-          </p>
         </section>
       )}
 
+      {/* หน้าการแจ้งเตือน */}
       {pathname === "/settings/notifications" && (
         <section className="space-y-3">
           {[
@@ -309,17 +422,15 @@ export default function SettingsPage() {
           ))}
           <Button
             onClick={saveNotifications}
+            disabled={saving}
             className="mt-3 w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto"
           >
-            บันทึกการตั้งค่า
+            {saving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
           </Button>
-          <p className="text-xs text-muted-foreground">
-            บันทึกความต้องการในเบราว์เซอร์เท่านั้น
-            ยังไม่เชื่อมการส่งแจ้งเตือนจริง
-          </p>
         </section>
       )}
 
+      {/* หน้าโปรไฟล์ผู้ใช้ */}
       {pathname === "/settings/profile" && (
         <section className="space-y-5">
           <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-[#FFF8F5] p-4 sm:p-5">
@@ -345,9 +456,6 @@ export default function SettingsPage() {
               placeholder="กรอกชื่อผู้ใช้"
               className="h-11 rounded-xl"
             />
-            <p className="text-xs text-muted-foreground">
-              แก้ไขชื่อผู้ใช้ใน Supabase Auth user_metadata
-            </p>
             <Button
               type="submit"
               disabled={saving || !user}
@@ -359,6 +467,7 @@ export default function SettingsPage() {
         </section>
       )}
 
+      {/* หน้าบัญชีและความปลอดภัย */}
       {pathname === "/settings/account" && (
         <div className="space-y-7">
           <form onSubmit={changePassword} className="space-y-4">
@@ -395,12 +504,8 @@ export default function SettingsPage() {
               disabled={saving || !user}
               className="w-full rounded-xl border-[#B66D57] text-[#A35E49] sm:w-auto"
             >
-              เปลี่ยนรหัสผ่าน
+              {saving ? "กำลังบันทึก..." : "เปลี่ยนรหัสผ่าน"}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              การเปลี่ยนรหัสผ่านใช้ Supabase Auth; บัญชี OAuth
-              อาจมีวิธีจัดการต่างกัน
-            </p>
           </form>
           <Separator />
           <section className="space-y-3">
@@ -446,6 +551,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* หน้าเกี่ยวกับแอป */}
       {pathname === "/settings/about" && (
         <section className="space-y-4">
           <div className="flex items-center gap-4 rounded-2xl bg-[#FFF8F5] p-4 sm:p-5">
