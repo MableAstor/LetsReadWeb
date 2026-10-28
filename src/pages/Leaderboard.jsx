@@ -1,6 +1,6 @@
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUp, Crown, Trophy } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 import {
   Card,
@@ -17,63 +17,229 @@ import {
   TabsTrigger,
 } from "../components/ui/tabs";
 
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "") + "/api/auth";
+// ======================================================
+// ตรวจสอบรอบ Leaderboard ตามเวลาไทย
+// Monthly เปลี่ยนเมื่อขึ้นเดือนใหม่
+// Yearly เปลี่ยนเมื่อขึ้นปีใหม่
+// ======================================================
+function getBangkokPeriodKey(period) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find(
+    (part) => part.type === "year"
+  )?.value;
+
+  const month = parts.find(
+    (part) => part.type === "month"
+  )?.value;
+
+  return period === "monthly"
+    ? `${year}-${month}`
+    : year;
+}
 export default function LeaderboardPage() {
   const [period, setPeriod] = useState("monthly");
   const isMonthly = period === "monthly";
 
-  // Mock leaderboard data
-  const rankList = [
-    {
-      rank: 1,
-      name: "Reader_No1",
-      reviews: isMonthly ? 45 : 320,
-      badge: "🥇",
-    },
-    {
-      rank: 2,
-      name: "BookWorm_A",
-      reviews: isMonthly ? 38 : 290,
-      badge: "🥈",
-    },
-    {
-      rank: 3,
-      name: "NovelLover",
-      reviews: isMonthly ? 30 : 255,
-      badge: "🥉",
-    },
-    {
-      rank: 4,
-      name: "BookieBook",
-      reviews: isMonthly ? 25 : 180,
-    },
-    {
-      rank: 5,
-      name: "StoryTeller",
-      reviews: isMonthly ? 20 : 150,
-    },
-    {
-      rank: 6,
-      name: "USERNAME (คุณ)",
-      reviews: isMonthly ? 17 : 129,
-      isCurrentUser: true,
-    },
-  ];
+  // ข้อมูล Leaderboard จาก Backend
+  const [leaderboardData, setLeaderboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const currentUser = rankList.find(
-    (user) => user.isCurrentUser
+  // Countdown แยกตาม Monthly และ Yearly
+  const [countdowns, setCountdowns] = useState({
+    monthly: "",
+    yearly: "",
+  });
+
+  const rankList = leaderboardData?.rankings || [];
+  const currentUser = leaderboardData?.currentUser || null;
+  const previousRank = leaderboardData?.previousRank || null;
+
+  const reviewsNeeded =
+    Number(leaderboardData?.reviewsNeeded) || 0;
+
+  // ======================================================
+  // โหลด Leaderboard จาก Backend
+  // ======================================================
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLeaderboard() {
+      setLoading(true);
+      setErrorMessage("");
+      setLeaderboardData(null);
+
+      try {
+        // ตรวจสอบ Session ของผู้ใช้
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session?.access_token) {
+          throw new Error(
+            "กรุณาเข้าสู่ระบบก่อนดูตารางอันดับ"
+          );
+        }
+
+        // เรียก API ตามช่วงเวลาที่เลือก
+        const response = await fetch(
+          `${API_URL}/leaderboard?period=${period}`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || result.success === false) {
+          throw new Error(
+            result.message || "โหลดตารางอันดับไม่สำเร็จ"
+          );
+        }
+
+        if (!cancelled) {
+          setLeaderboardData(result);
+        }
+      } catch (error) {
+        console.error("[Leaderboard] Load error:", error);
+
+        if (!cancelled) {
+          setLeaderboardData(null);
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "เกิดข้อผิดพลาดในการโหลดตารางอันดับ"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadLeaderboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, reloadKey]);
+// ======================================================
+// ตรวจจับการเปลี่ยนเดือนหรือปี
+// หากรอบเปลี่ยน ให้โหลด Leaderboard ใหม่อัตโนมัติ
+// ======================================================
+useEffect(() => {
+  let lastPeriodKey = getBangkokPeriodKey(period);
+
+  const timerId = window.setInterval(() => {
+    const nextPeriodKey = getBangkokPeriodKey(period);
+
+    // หากเข้าสู่รอบใหม่ ให้โหลดข้อมูลอีกครั้ง
+    if (nextPeriodKey !== lastPeriodKey) {
+      lastPeriodKey = nextPeriodKey;
+
+      setReloadKey((key) => key + 1);
+
+      console.log(
+        `[Leaderboard] New ${period} period detected. Reloading rankings...`
+      );
+    }
+  }, 30_000);
+
+  return () => {
+    window.clearInterval(timerId);
+  };
+}, [period]);
+ // ======================================================
+// Countdown ถึงสิ้นเดือนและสิ้นปีตามเวลาไทย
+// ======================================================
+useEffect(() => {
+  const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+  function formatRemainingTime(endDate) {
+    const remaining = Math.max(
+      0,
+      endDate.getTime() - Date.now()
+    );
+
+    const days = Math.floor(
+      remaining / (1000 * 60 * 60 * 24)
+    );
+
+    const hours = Math.floor(
+      (remaining % (1000 * 60 * 60 * 24)) /
+        (1000 * 60 * 60)
+    );
+
+    const minutes = Math.floor(
+      (remaining % (1000 * 60 * 60)) /
+        (1000 * 60)
+    );
+
+    return `เหลืออีก ${days} วัน ${hours} ชั่วโมง ${minutes} นาที`;
+  }
+
+  function updateCountdowns() {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "numeric",
+    }).formatToParts(new Date());
+
+    const year = Number(
+      parts.find((part) => part.type === "year")?.value
+    );
+
+    const month = Number(
+      parts.find((part) => part.type === "month")?.value
+    );
+
+    // เวลาเริ่มต้นของเดือนถัดไปในประเทศไทย
+    const endOfMonth = new Date(
+      Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS
+    );
+
+    // เวลาเริ่มต้นของปีถัดไปในประเทศไทย
+    const endOfYear = new Date(
+      Date.UTC(year + 1, 0, 1) - BANGKOK_OFFSET_MS
+    );
+
+    setCountdowns({
+      monthly: formatRemainingTime(endOfMonth),
+      yearly: formatRemainingTime(endOfYear),
+    });
+  }
+
+  updateCountdowns();
+
+  const timer = window.setInterval(
+    updateCountdowns,
+    60000
   );
 
-  const previousRank = rankList.find(
-    (user) => user.rank === currentUser.rank - 1
-  );
+  return () => window.clearInterval(timer);
+}, []);
 
-  const reviewsNeeded = previousRank
-    ? Math.max(
-        0,
-        previousRank.reviews - currentUser.reviews
-      )
-    : 0;
-
+  // ======================================================
+  // ของรางวัล TOP 1–3
+  // คงการออกแบบเดิมไว้
+  // ======================================================
   const rewardBadges = [
     {
       rank: 1,
@@ -105,6 +271,29 @@ export default function LeaderboardPage() {
         lg:pb-28
       "
     >
+      {/* สถานะการโหลดและข้อผิดพลาด */}
+      {loading && (
+        <p className="py-3 text-center text-sm text-muted-foreground">
+          กำลังโหลดตารางอันดับ...
+        </p>
+      )}
+
+      {!loading && errorMessage && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
+          <p className="text-sm text-red-600">
+            {errorMessage}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setReloadKey((key) => key + 1)}
+            className="mt-2 text-sm font-semibold underline"
+          >
+            ลองอีกครั้ง
+          </button>
+        </div>
+      )}
+
       {/* 1. Monthly / Yearly Tabs */}
       <div className="w-full shrink-0">
         <Tabs
@@ -141,7 +330,7 @@ export default function LeaderboardPage() {
               </span>
 
               <span className="text-center text-[10px] leading-snug text-gray-500">
-                เหลืออีก 5 วัน 24 ชั่วโมง 10 นาที
+                {countdowns.monthly}
               </span>
             </TabsTrigger>
 
@@ -166,7 +355,7 @@ export default function LeaderboardPage() {
               </span>
 
               <span className="text-center text-[10px] leading-snug text-gray-500">
-                เหลืออีก 116 วัน 24 ชั่วโมง 10 นาที
+                {countdowns.yearly}
               </span>
             </TabsTrigger>
           </TabsList>
@@ -308,137 +497,162 @@ export default function LeaderboardPage() {
         </CardHeader>
 
         <CardContent className="space-y-2 px-3 sm:px-5">
-          {rankList.map((user) => (
-            <div
-              key={user.rank}
-              className={`
-                flex w-full min-w-0
-                items-center justify-between
-                gap-2 rounded-xl
-                px-3 py-3 transition-colors
-                sm:gap-3 sm:px-4
-                ${
-                  user.isCurrentUser
-                    ? "border border-amber-300 bg-[#fff5d6]"
-                    : "hover:bg-muted/50"
-                }
-              `}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          {loading ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              กำลังโหลดอันดับ...
+            </p>
+          ) : errorMessage ? null : rankList.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              ยังไม่มีข้อมูลอันดับ
+            </p>
+          ) : (
+            rankList.map((user) => (
+              <div
+                key={user.UserID ?? user.rank}
+                className={`
+                  flex w-full min-w-0
+                  items-center justify-between
+                  gap-2 rounded-xl
+                  px-3 py-3 transition-colors
+                  sm:gap-3 sm:px-4
+                  ${
+                    user.isCurrentUser
+                      ? "border border-amber-300 bg-[#fff5d6]"
+                      : "hover:bg-muted/50"
+                  }
+                `}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                  <span
+                    className="
+                      flex w-7 shrink-0
+                      items-center justify-center
+                      text-sm font-bold text-gray-600
+                    "
+                  >
+                    {user.rank === 1
+                      ? "🥇"
+                      : user.rank === 2
+                        ? "🥈"
+                        : user.rank === 3
+                          ? "🥉"
+                          : `#${user.rank}`}
+                  </span>
+
+                  <span
+                    className={`
+                      min-w-0 truncate
+                      text-xs sm:text-sm
+                      ${
+                        user.isCurrentUser
+                          ? "font-bold text-gray-900"
+                          : "text-foreground"
+                      }
+                    `}
+                    title={user.name}
+                  >
+                    {user.name}
+                    {user.isCurrentUser ? " (คุณ)" : ""}
+                  </span>
+                </div>
+
                 <span
                   className="
-                    flex w-7 shrink-0
-                    items-center justify-center
-                    text-sm font-bold text-gray-600
+                    shrink-0 text-right
+                    text-xs font-medium
+                    text-gray-500 sm:text-sm
                   "
                 >
-                  {user.badge || `#${user.rank}`}
-                </span>
-
-                <span
-                  className={`
-                    min-w-0 truncate
-                    text-xs sm:text-sm
-                    ${
-                      user.isCurrentUser
-                        ? "font-bold text-gray-900"
-                        : "text-foreground"
-                    }
-                  `}
-                  title={user.name}
-                >
-                  {user.name}
+                  {user.reviews} รีวิว
                 </span>
               </div>
-
-              <span
-                className="
-                  shrink-0 text-right
-                  text-xs font-medium
-                  text-gray-500 sm:text-sm
-                "
-              >
-                {user.reviews} รีวิว
-              </span>
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
 
       {/* 4. Floating Current User Ranking */}
       {/* Mobile: above Bottom Navigation */}
       {/* Desktop: bottom of viewport */}
-      <Card
-        className="
-          fixed
-          bottom-[calc(88px+env(safe-area-inset-bottom))]
-          left-1/2 z-40
-          w-[calc(100%-2rem)]
-          max-w-xl
-          -translate-x-1/2
-
-          rounded-2xl
-          border border-amber-200
-          bg-[#fce49b]
-          py-0 text-gray-900
-          shadow-lg
-
-          lg:bottom-4
-        "
-      >
-        <CardContent
+      {!loading && !errorMessage && currentUser && (
+        <Card
           className="
-            flex min-w-0
-            items-center justify-between
-            gap-2 px-3 py-3
-            sm:gap-4 sm:px-4
+            fixed
+            bottom-[calc(88px+env(safe-area-inset-bottom))]
+            left-1/2 z-40
+            w-[calc(100%-2rem)]
+            max-w-xl
+            -translate-x-1/2
+
+            rounded-2xl
+            border border-amber-200
+            bg-[#fce49b]
+            py-0 text-gray-900
+            shadow-lg
+
+            lg:bottom-4
           "
         >
-          {/* User Rank */}
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <div
-              className="
-                shrink-0 rounded-xl
-                bg-white/90 px-3 py-1.5
-                text-center shadow-xs
-              "
-            >
-              <span className="block text-[9px] font-medium text-gray-500">
-                ลำดับของคุณ
-              </span>
+          <CardContent
+            className="
+              flex min-w-0
+              items-center justify-between
+              gap-2 px-3 py-3
+              sm:gap-4 sm:px-4
+            "
+          >
+            {/* User Rank */}
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <div
+                className="
+                  shrink-0 rounded-xl
+                  bg-white/90 px-3 py-1.5
+                  text-center shadow-xs
+                "
+              >
+                <span className="block text-[9px] font-medium text-gray-500">
+                  ลำดับของคุณ
+                </span>
 
-              <span className="block text-sm font-black">
-                #{currentUser.rank}
-              </span>
-            </div>
+                <span className="block text-sm font-black">
+                  #{currentUser.rank}
+                </span>
+              </div>
 
-            <span className="min-w-0 truncate text-xs font-bold sm:text-sm">
-              USERNAME
-            </span>
-          </div>
-
-          {/* Reviews Needed */}
-          <div className="shrink-0 text-right">
-            <p className="text-[11px] font-bold sm:text-xs">
-              รีวิวอีก {reviewsNeeded} เรื่อง
-            </p>
-
-            <div
-              className="
-                flex items-center
-                justify-end gap-1
-                text-[10px] font-bold
-                text-emerald-700 sm:text-xs
-              "
-            >
-              <ArrowUp className="h-3 w-3" />
-              <span>
-                เพื่อขึ้นอันดับ {previousRank?.rank ?? 1}
+              <span className="min-w-0 truncate text-xs font-bold sm:text-sm">
+                {currentUser.name}
               </span>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            {/* Reviews Needed */}
+            <div className="shrink-0 text-right">
+              <p className="text-[11px] font-bold sm:text-xs">
+                {currentUser.rank === 1
+                  ? "คุณอยู่อันดับ 1 แล้ว"
+                  : `รีวิวอีก ${reviewsNeeded} เรื่อง`}
+              </p>
+
+              <div
+                className="
+                  flex items-center
+                  justify-end gap-1
+                  text-[10px] font-bold
+                  text-emerald-700 sm:text-xs
+                "
+              >
+                {currentUser.rank !== 1 && (
+                  <>
+                    <ArrowUp className="h-3 w-3" />
+                    <span>
+                      เพื่อขึ้นอันดับ {previousRank?.rank ?? 1}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }
