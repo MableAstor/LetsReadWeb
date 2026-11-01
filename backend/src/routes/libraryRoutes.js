@@ -3,6 +3,7 @@ import { supabase, supabaseAdmin } from "../config/supabase.js";
 import { getOrCreateUserProfile } from "./authRoutes.js";
 
 const router = express.Router();
+
 /* ======================================================
    LIBRARY: ตรวจสอบผู้ใช้ที่เข้าสู่ระบบ
    ====================================================== */
@@ -30,7 +31,7 @@ async function getLibraryUser(req) {
 }
 
 /* ======================================================
-   LIBRARY: ค้นหาหนังสือเพื่อเพิ่มเข้าชั้น
+   LIBRARY: ค้นหาหนังสือ
    GET /api/auth/library/books?search=ชื่อหนังสือ
    ====================================================== */
 router.get("/library/books", async (req, res) => {
@@ -69,11 +70,16 @@ router.get("/library/books", async (req, res) => {
 /* ======================================================
    LIBRARY: โหลด Want to Read และ Want to Buy
    GET /api/auth/shelves
+
+   ลำดับรูป:
+   1. รูปจาก Reviews.Image_URL ของหนังสือ
+   2. รูปปกจาก Books.Books_Cover
    ====================================================== */
 router.get("/shelves", async (req, res) => {
   try {
     const userProfile = await getLibraryUser(req);
 
+    // 1. ดึงรายการหนังสือในชั้นของผู้ใช้
     const { data: shelves, error: shelvesError } =
       await supabaseAdmin
         .from("User_Shelves")
@@ -89,29 +95,96 @@ router.get("/shelves", async (req, res) => {
       });
     }
 
+    // 2. ดึง BooksID ที่ไม่ซ้ำกัน
     const bookIds = [
-      ...new Set(shelves.map((item) => item.BooksID)),
+      ...new Set(
+        shelves
+          .map((item) => item.BooksID)
+          .filter((id) => id !== null && id !== undefined)
+      ),
     ];
 
-    const { data: books, error: booksError } =
-      await supabaseAdmin
-        .from("Books")
-        .select("BooksID, Books_title, Books_Cover, Book_Synopsis")
-        .in("BooksID", bookIds);
+    // 3. ดึงรายละเอียดหนังสือและรูปปกจาก Books
+    let books = [];
 
-    if (booksError) throw booksError;
+    if (bookIds.length > 0) {
+      const { data, error: booksError } =
+        await supabaseAdmin
+          .from("Books")
+          .select(
+            "BooksID, Books_title, Books_Cover, Book_Synopsis"
+          )
+          .in("BooksID", bookIds);
+
+      if (booksError) throw booksError;
+
+      books = data || [];
+    }
 
     const bookMap = new Map(
-      (books || []).map((book) => [
+      books.map((book) => [
         String(book.BooksID),
         book,
       ])
     );
 
-    const result = shelves.map((item) => ({
-      ...item,
-      Book: bookMap.get(String(item.BooksID)) || null,
-    }));
+    // ======================================================
+    // 4. ดึงรูปจากรีวิวที่เกี่ยวข้องกับหนังสือเหล่านี้
+    // เรียงรีวิวใหม่ไปเก่า เพื่อให้เลือกภาพล่าสุดที่มีรูป
+    // ======================================================
+    const reviewImageMap = new Map();
+
+    if (bookIds.length > 0) {
+      const { data: reviewImages, error: reviewImagesError } =
+        await supabaseAdmin
+          .from("Reviews")
+          .select("BooksID, Image_URL, Created_At")
+          .in("BooksID", bookIds)
+          .not("Image_URL", "is", null)
+          .order("Created_At", { ascending: false });
+
+      if (reviewImagesError) throw reviewImagesError;
+
+      for (const review of reviewImages || []) {
+        const bookKey = String(review.BooksID);
+        const imageUrl = String(review.Image_URL || "").trim();
+
+        // เก็บรูปแรกของแต่ละเล่ม ซึ่งเป็นรูปจากรีวิวล่าสุดที่มีรูป
+        if (imageUrl && !reviewImageMap.has(bookKey)) {
+          reviewImageMap.set(bookKey, imageUrl);
+        }
+      }
+    }
+
+    // ======================================================
+    // 5. รวมข้อมูลชั้นหนังสือและเลือกรูปที่จะแสดง
+    // ถ้ามีรูปรีวิว ใช้รูปรีวิวก่อน มิฉะนั้นใช้ Books_Cover
+    // ======================================================
+    const result = shelves.map((item) => {
+      const book = bookMap.get(String(item.BooksID));
+
+      if (!book) {
+        return {
+          ...item,
+          Book: null,
+        };
+      }
+
+      const reviewImage = reviewImageMap.get(
+        String(item.BooksID)
+      );
+
+      return {
+        ...item,
+        Book: {
+          ...book,
+
+          // ส่งรูปที่ควรแสดงใน Library ผ่าน Books_Cover
+          // เพื่อให้หน้าเว็บเดิมที่อ่าน Book.Books_Cover ใช้งานได้
+          Books_Cover: reviewImage || book.Books_Cover || null,
+        },
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -277,10 +350,11 @@ router.delete("/shelves/:bookId", async (req, res) => {
       message: error.message || "ไม่สามารถลบหนังสือออกจากชั้นได้",
     });
   }
-  });
-  // ======================================================
+});
+
+// ======================================================
 // GET SAVED REVIEWS
-// ดึงรีวิวที่ผู้ใช้บันทึกไว้
+// ดึงรีวิวที่ผู้ใช้บันทึกไว้ พร้อมรูปปกจาก Books
 // ======================================================
 router.get("/saved-reviews", async (req, res) => {
   try {
@@ -321,7 +395,6 @@ router.get("/saved-reviews", async (req, res) => {
 
     if (savedError) throw savedError;
 
-    // ยังไม่มีรายการที่บันทึกไว้
     if (!savedRows || savedRows.length === 0) {
       return res.status(200).json({
         success: true,
@@ -353,30 +426,68 @@ router.get("/saved-reviews", async (req, res) => {
 
     if (reviewsError) throw reviewsError;
 
-    // ======================================================
-    // เพิ่ม: ดึงจำนวน Like ของรีวิวใน Saved Books
-    // ======================================================
-    const { data: likes, error: likesError } =
-      await supabaseAdmin
-        .from("Review_Likes")
-        .select("ReviewsID, UserID")
-        .in("ReviewsID", reviewIds);
+    const reviewList = reviews || [];
 
-    if (likesError) throw likesError;
+    // ======================================================
+    // ดึงรูปปกจาก Books สำหรับกรณีที่รีวิวไม่มี Image_URL
+    // ======================================================
+    const bookIds = [
+      ...new Set(
+        reviewList
+          .map((review) => review.BooksID)
+          .filter((id) => id !== null && id !== undefined)
+      ),
+    ];
+
+    let books = [];
+
+    if (bookIds.length > 0) {
+      const { data, error: booksError } =
+        await supabaseAdmin
+          .from("Books")
+          .select("BooksID, Books_Cover")
+          .in("BooksID", bookIds);
+
+      if (booksError) throw booksError;
+
+      books = data || [];
+    }
+
+    const bookCoverMap = new Map(
+      books.map((book) => [
+        String(book.BooksID),
+        book.Books_Cover,
+      ])
+    );
+
+    // ======================================================
+    // ดึงจำนวน Like ของรีวิวใน Saved Books
+    // ======================================================
+    let likes = [];
+
+    if (reviewIds.length > 0) {
+      const { data, error: likesError } =
+        await supabaseAdmin
+          .from("Review_Likes")
+          .select("ReviewsID, UserID")
+          .in("ReviewsID", reviewIds);
+
+      if (likesError) throw likesError;
+
+      likes = data || [];
+    }
 
     const likeCountMap = new Map();
     const likedReviewIds = new Set();
 
-    for (const like of likes || []) {
+    for (const like of likes) {
       const reviewKey = String(like.ReviewsID);
 
-      // นับจำนวน Like ของแต่ละรีวิว
       likeCountMap.set(
         reviewKey,
         (likeCountMap.get(reviewKey) || 0) + 1
       );
 
-      // ตรวจสอบว่าผู้ใช้ปัจจุบันกด Like หรือยัง
       if (
         String(like.UserID) === String(userProfile.UserID)
       ) {
@@ -386,7 +497,11 @@ router.get("/saved-reviews", async (req, res) => {
 
     // ดึงชื่อผู้เขียนรีวิว
     const userIds = [
-      ...new Set((reviews || []).map((item) => item.UserID)),
+      ...new Set(
+        reviewList
+          .map((item) => item.UserID)
+          .filter((id) => id !== null && id !== undefined)
+      ),
     ];
 
     let users = [];
@@ -411,13 +526,16 @@ router.get("/saved-reviews", async (req, res) => {
     );
 
     const reviewMap = new Map(
-      (reviews || []).map((review) => [
+      reviewList.map((review) => [
         String(review.ReviewsID),
         review,
       ])
     );
 
-    // เรียงตามวันที่บันทึก และเพิ่มชื่อผู้รีวิว
+    // ======================================================
+    // รวมข้อมูลและเพิ่มรูปปกจาก Books
+    // ReviewCard สามารถใช้ Image_URL ก่อน Books_Cover ได้
+    // ======================================================
     const formattedReviews = savedRows
       .map((saved) => {
         const review = reviewMap.get(
@@ -428,14 +546,21 @@ router.get("/saved-reviews", async (req, res) => {
 
         return {
           ...review,
+
+          Books_Cover:
+            bookCoverMap.get(String(review.BooksID)) || null,
+
           User_Name:
             userMap.get(String(review.UserID)) || "ผู้ใช้",
+
           Saved_At: saved.Created_At,
           Saved_By_Me: true,
+
           Like_Count:
-    likeCountMap.get(String(review.ReviewsID)) || 0,
-  Liked_By_Me:
-    likedReviewIds.has(String(review.ReviewsID)),
+            likeCountMap.get(String(review.ReviewsID)) || 0,
+
+          Liked_By_Me:
+            likedReviewIds.has(String(review.ReviewsID)),
         };
       })
       .filter(Boolean);
@@ -447,7 +572,7 @@ router.get("/saved-reviews", async (req, res) => {
   } catch (error) {
     console.error("[SAVED REVIEWS] Fetch error:", error);
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       message: "ไม่สามารถโหลด Saved Books ได้",
       error: error.message,
@@ -546,11 +671,8 @@ router.post("/reviews/:reviewId/save", async (req, res) => {
           UserID: userProfile.UserID,
         });
 
-      if (insertError) {
-        // รองรับกรณีที่มีการบันทึกรายการซ้ำพร้อมกัน
-        if (insertError.code !== "23505") {
-          throw insertError;
-        }
+      if (insertError && insertError.code !== "23505") {
+        throw insertError;
       }
 
       saved = true;
@@ -566,11 +688,12 @@ router.post("/reviews/:reviewId/save", async (req, res) => {
   } catch (error) {
     console.error("[SAVE REVIEW] Error:", error);
 
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       message: "ไม่สามารถบันทึกรีวิวได้",
       error: error.message,
     });
   }
 });
+
 export default router;

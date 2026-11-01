@@ -61,6 +61,10 @@ export default function ReviewCard({ review }) {
   const userName = review.User_Name || "Reader";
   const bookTitle = review.Book_Title || "Untitled book";
 
+  // เลือกรูปที่จะแสดง: รูปที่ผู้ใช้อัปโหลดก่อน
+  // หากไม่มี ให้ใช้รูปปกหนังสือจากฐานข้อมูล
+  const reviewImage = review.Image_URL || review.Books_Cover;
+
   const reviewDate = review.Created_At
     ? new Date(review.Created_At).toLocaleDateString("th-TH")
     : null;
@@ -338,17 +342,17 @@ export default function ReviewCard({ review }) {
             </p>
           )}
 
-          {/* Image from Supabase Storage */}
-          {review.Image_URL && (
+          {/* Review image: uploaded image first, book cover as fallback */}
+          {reviewImage && (
             <img
-              src={review.Image_URL}
+              src={reviewImage}
               alt={`รูปประกอบรีวิว ${bookTitle}`}
               loading="lazy"
               className="mt-3 max-h-[400px] w-full rounded-lg bg-muted/30 object-contain"
               onError={(event) => {
                 console.error(
                   "[ReviewCard] โหลดรูปไม่สำเร็จ:",
-                  review.Image_URL
+                  reviewImage
                 );
 
                 event.currentTarget.style.display = "none";

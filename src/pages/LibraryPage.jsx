@@ -101,7 +101,7 @@ export default function LibraryPage() {
         Array.isArray(result.reviews) ? result.reviews : []
       ).map((item) => {
         const title = item.Book_Title || "Untitled book";
-        const imageUrl = item.Image_URL || "";
+        const imageUrl = item.Image_URL || item.Books_Cover || "";
 
         const tags = [
           item.Main_Category,
