@@ -279,6 +279,17 @@ export default function Swipeforbooks() {
       console.log("[DEBUG] Current book:", currentBook);
       console.log("[DEBUG] User ID:", userId);
       console.log("[DEBUG] Calling Python API:", `${apiBase}/next-book`);
+      console.log("[FEEDBACK TEST]", {
+  action,
+  likes: updatedLikes.map((book) => ({
+    title: book.title,
+    subcategories: book.subcategories,
+  })),
+  dislikes: updatedDislikes.map((book) => ({
+    title: book.title,
+    subcategories: book.subcategories,
+  })),
+});
 
       const payload = await getNextBook({
         apiBase,
