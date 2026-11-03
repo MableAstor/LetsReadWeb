@@ -1,5 +1,9 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+
 import { Headbar } from "./components/Headbar";
+import { BottomBar } from "./components/Bottombar";
+
 import HomePage from "./pages/HomePage";
 import FeedPage from "./pages/FeedPage";
 import SwipePage from "./pages/SwipePage";
@@ -7,32 +11,30 @@ import LibraryPage from "./pages/LibraryPage";
 import ProfilePage from "./pages/ProfilePage";
 import Swipeforbooks from "./pages/Swipeforbooks";
 import ResultPage from "./pages/ResultPage";
+
 import LoginPage from "./pages/LoginPage";
 import SigninPage from "./pages/SigninPage";
-import LeaderboardPage from "./pages/Leaderboard";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import LandingPage from "./pages/LandingPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
-import ProtectedRoute from "./components/ProtectedRoute";
+
+import LeaderboardPage from "./pages/Leaderboard";
 import SettingsPage from "./pages/SettingsPage";
-import { BottomBar } from "./components/Bottombar";
 import ViralBooksPage from "./pages/ViralBooksPage";
 import Top100Page from "./pages/Top100Page";
+
 export default function App() {
   const location = useLocation();
-  const showHeadbar = ![
-    "/",
-    "/Login",
-    "/Signin",
-    "/forgotpass",
-    "/reset-password",
-  ].includes(location.pathname);
+
   const isAuthPage = [
     "/Login",
     "/Signin",
     "/forgotpass",
     "/reset-password",
   ].includes(location.pathname);
+
+  // แสดงแถบนำทางทุกหน้าที่ไม่ใช่หน้า Authentication
+  const showNavigation = !isAuthPage;
+
   return (
     <div
       className={`min-h-screen flex flex-col w-full ${
@@ -41,154 +43,62 @@ export default function App() {
           : "bg-[#FCD8CD]"
       }`}
     >
-      {/* PC และ iPad */}
-      {showHeadbar && (
+      {/* Desktop และ iPad */}
+      {showNavigation && (
         <div className="hidden md:block w-full">
           <Headbar />
         </div>
       )}
 
       {/* Mobile */}
-      {showHeadbar && (
+      {showNavigation && (
         <div className="md:hidden">
           <BottomBar />
         </div>
       )}
 
       <main
-  className={`w-full min-w-0 flex-1 ${
-    showHeadbar ? "pb-24 md:pb-0" : ""
-  }`}
->
-  <div className="mx-auto w-full min-w-0 max-w-6xl">
-    <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/feed"
-            element={
-              <ProtectedRoute>
-                <FeedPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/leaderboard"
-            element={
-              <ProtectedRoute>
-                <LeaderboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/swipe"
-            element={
-              <ProtectedRoute>
-                <SwipePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/swipeforbooks"
-            element={
-              <ProtectedRoute>
-                <Swipeforbooks />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/library"
-            element={
-              <ProtectedRoute>
-                <LibraryPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/Result"
-            element={
-              <ProtectedRoute>
-                <ResultPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/Login" element={<LoginPage />} />
-          <Route path="/Signin" element={<SigninPage />} />
-          <Route path="/forgotpass" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+        className={`w-full min-w-0 flex-1 ${
+          showNavigation ? "pb-24 md:pb-0" : ""
+        }`}
+      >
+        <div className="mx-auto w-full min-w-0 max-w-6xl">
+          <Routes>
+            {/* เปิดเว็บมาเข้าหน้า Home เลย */}
+            <Route path="/" element={<Navigate to="/home" replace />} />
 
-          <Route
-            path="/settings/reading"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* หน้าหลัก: เข้าดูได้โดยไม่ต้อง Login */}
+            <Route path="/home" element={<HomePage />} />
+            <Route path="/feed" element={<FeedPage />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/swipe" element={<SwipePage />} />
+            <Route path="/swipeforbooks" element={<Swipeforbooks />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/Result" element={<ResultPage />} />
 
-          <Route
-            path="/settings/appearance"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* หน้าหนังสือ */}
+            <Route path="/viral-books" element={<ViralBooksPage />} />
+            <Route path="/top-100" element={<Top100Page />} />
 
-          <Route
-            path="/settings/notifications"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* หน้า Settings เปิดดูได้ แต่การบันทึกค่าต้อง Login */}
+            <Route path="/settings/reading" element={<SettingsPage />} />
+            <Route path="/settings/appearance" element={<SettingsPage />} />
+            <Route path="/settings/notifications" element={<SettingsPage />} />
+            <Route path="/settings/account" element={<SettingsPage />} />
+            <Route path="/settings/about" element={<SettingsPage />} />
+            <Route path="/settings/profile" element={<SettingsPage />} />
 
-          <Route
-            path="/settings/account"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
+            {/* Authentication */}
+            <Route path="/Login" element={<LoginPage />} />
+            <Route path="/Signin" element={<SigninPage />} />
+            <Route path="/forgotpass" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-          <Route
-            path="/settings/about"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings/profile"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/viral-books" element={<ViralBooksPage />} />
-      <Route path="/top-100" element={<Top100Page />} />
-        </Routes>
-  </div>
-        
+            {/* URL ที่ไม่มีอยู่ */}
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );

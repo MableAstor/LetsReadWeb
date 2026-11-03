@@ -1,8 +1,10 @@
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
+import sessionRoutes from "./routes/sessionRoutes.js";
+import swipeRoutes from "./routes/swipeRoutes.js";
 
 dotenv.config();
 
@@ -37,7 +39,22 @@ app.use(
 
 app.use(express.json());
 
+// Authentication
 app.use("/api/auth", authRoutes);
+
+// Reviews
+app.use("/api/reviews", reviewRoutes);
+
+// Sessions
+app.use("/api/sessions", sessionRoutes);
+
+// Swipe History
+app.use("/api/swipes", swipeRoutes);
+
+// Compatibility alias ชั่วคราว:
+// รองรับ Frontend เดิมที่อาจยังเรียก /api/auth/reviews/test
+// ลบบรรทัดนี้ได้หลังย้าย Frontend ไป /api/reviews/test ครบแล้ว
+app.use("/api/auth/reviews", reviewRoutes);
 
 app.get("/", (req, res) => {
   res.json({
@@ -65,3 +82,5 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`Let's Read Backend is running on port ${PORT}`);
   console.log("[CORS] Allowed origins:", allowedOrigins);
 });
+
+

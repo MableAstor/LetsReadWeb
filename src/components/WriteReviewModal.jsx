@@ -1,7 +1,10 @@
 
+
 import { useEffect, useState } from "react";
-import { Camera, Star, X } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Camera, Star, X, LoaderCircle } from "lucide-react";
 import { supabase } from "../lib/supabase";
+
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -40,6 +43,8 @@ export default function WriteReviewModal({
   onClose,
   onReviewPosted,
 }) {
+  const navigate = useNavigate();
+const location = useLocation();
   const [rating, setRating] = useState(0);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -49,6 +54,7 @@ export default function WriteReviewModal({
   const [reviewText, setReviewText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  
 
   // สร้าง Preview และคืนหน่วยความจำเมื่อเปลี่ยนรูป
   useEffect(() => {
@@ -174,8 +180,14 @@ export default function WriteReviewModal({
       }
 
       if (!session?.access_token || !session?.user?.id) {
-        throw new Error("กรุณาเข้าสู่ระบบก่อนเขียนรีวิว");
-      }
+  onClose();
+
+  navigate("/Login", {
+    state: { from: location.pathname },
+  });
+
+  return;
+}
 
       // 2. อัปโหลดรูป หากผู้ใช้เลือกรูปไว้
       let imageUrl = null;
@@ -240,21 +252,23 @@ export default function WriteReviewModal({
       }}
     >
       <DialogContent
-        className="
-          !w-[calc(100vw-2rem)]
-          !max-w-[900px]
-          max-h-[85dvh]
-          overflow-x-hidden overflow-y-auto
-          p-4 sm:p-6
-        "
-      >
+  className="
+    !w-[calc(100vw-2rem)]
+    !max-w-[900px]
+    max-h-[85dvh]
+    overflow-x-hidden overflow-y-auto
+    rounded-2xl border-[#F1D9D2]
+    bg-[#FFFCFA]
+    p-4 sm:p-6
+  "
+>
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            Write a Review
-          </DialogTitle>
-          <DialogDescription>
-            Share your thoughts about a book.
-          </DialogDescription>
+          <DialogTitle className="text-xl font-bold text-[#684B50]">
+  Write a Review
+</DialogTitle>
+          <DialogDescription className="text-[#98777A]">
+  แบ่งปันความรู้สึกและเรื่องราวจากหนังสือที่คุณอ่าน
+</DialogDescription>
         </DialogHeader>
 
         <form
@@ -456,22 +470,30 @@ export default function WriteReviewModal({
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
+  type="button"
+  variant="outline"
+  onClick={onClose}
+  disabled={submitting}
+  className="rounded-full border-[#EBCDC7] text-[#98777A] hover:bg-[#FFF1EE]"
+>
+  Cancel
+</Button>
 
           <Button
-            type="submit"
-            form="review-form"
-            disabled={submitting}
-            className="bg-pink-500 text-white hover:bg-pink-600"
-          >
-            {submitting ? "Posting..." : "Post Review"}
-          </Button>
+  type="submit"
+  form="review-form"
+  disabled={submitting}
+  className="rounded-full bg-[#D99BA0] px-6 text-white hover:bg-[#C9868C] disabled:opacity-60"
+>
+  {submitting ? (
+    <>
+      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+      กำลังบันทึก...
+    </>
+  ) : (
+    "Post Review"
+  )}
+</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
