@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowUp, Crown, Trophy } from "lucide-react";
 import { supabase } from "../lib/supabase";
-
 import {
   Card,
   CardContent,
@@ -20,33 +19,72 @@ import {
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
+
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 // ======================================================
 // ตรวจสอบรอบ Leaderboard ตามเวลาไทย
-// Monthly เปลี่ยนเมื่อขึ้นเดือนใหม่
-// Yearly เปลี่ยนเมื่อขึ้นปีใหม่
+//
+// Weekly:
+// เปลี่ยนเมื่อขึ้นวันจันทร์
+//
+// Monthly:
+// เปลี่ยนเมื่อขึ้นเดือนใหม่
 // ======================================================
 function getBangkokPeriodKey(period) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
+    day: "2-digit",
   }).formatToParts(new Date());
 
-  const year = parts.find(
-    (part) => part.type === "year"
-  )?.value;
+  const year = Number(
+    parts.find((part) => part.type === "year")?.value
+  );
 
-  const month = parts.find(
-    (part) => part.type === "month"
-  )?.value;
+  const month = Number(
+    parts.find((part) => part.type === "month")?.value
+  );
 
-  return period === "monthly"
-    ? `${year}-${month}`
-    : year;
+  const day = Number(
+    parts.find((part) => part.type === "day")?.value
+  );
+
+  // Weekly: ใช้วันที่วันจันทร์ของสัปดาห์ปัจจุบันเป็น Key
+  if (period === "weekly") {
+    const bangkokDate = new Date(
+      Date.UTC(year, month - 1, day)
+    );
+
+    const dayOfWeek = bangkokDate.getUTCDay();
+
+    // Sunday = 0, Monday = 1, ..., Saturday = 6
+    const daysSinceMonday = (dayOfWeek + 6) % 7;
+
+    bangkokDate.setUTCDate(
+      bangkokDate.getUTCDate() - daysSinceMonday
+    );
+
+    const mondayYear = bangkokDate.getUTCFullYear();
+    const mondayMonth = String(
+      bangkokDate.getUTCMonth() + 1
+    ).padStart(2, "0");
+    const mondayDay = String(
+      bangkokDate.getUTCDate()
+    ).padStart(2, "0");
+
+    return `${mondayYear}-${mondayMonth}-${mondayDay}`;
+  }
+
+  // Monthly: ใช้ปีและเดือนปัจจุบันเป็น Key
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
+
 export default function LeaderboardPage() {
-  const [period, setPeriod] = useState("monthly");
-  const isMonthly = period === "monthly";
+  const [period, setPeriod] = useState("weekly");
+
+  const isWeekly = period === "weekly";
 
   // ข้อมูล Leaderboard จาก Backend
   const [leaderboardData, setLeaderboardData] = useState(null);
@@ -54,10 +92,10 @@ export default function LeaderboardPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Countdown แยกตาม Monthly และ Yearly
+  // Countdown แยกตาม Weekly และ Monthly
   const [countdowns, setCountdowns] = useState({
+    weekly: "",
     monthly: "",
-    yearly: "",
   });
 
   const rankList = leaderboardData?.rankings || [];
@@ -121,6 +159,7 @@ export default function LeaderboardPage() {
 
         if (!cancelled) {
           setLeaderboardData(null);
+
           setErrorMessage(
             error instanceof Error
               ? error.message
@@ -140,101 +179,120 @@ export default function LeaderboardPage() {
       cancelled = true;
     };
   }, [period, reloadKey]);
-// ======================================================
-// ตรวจจับการเปลี่ยนเดือนหรือปี
-// หากรอบเปลี่ยน ให้โหลด Leaderboard ใหม่อัตโนมัติ
-// ======================================================
-useEffect(() => {
-  let lastPeriodKey = getBangkokPeriodKey(period);
 
-  const timerId = window.setInterval(() => {
-    const nextPeriodKey = getBangkokPeriodKey(period);
+  // ======================================================
+  // ตรวจจับการเปลี่ยนสัปดาห์หรือเดือน
+  // หากรอบเปลี่ยน ให้โหลด Leaderboard ใหม่อัตโนมัติ
+  // ======================================================
+  useEffect(() => {
+    let lastPeriodKey = getBangkokPeriodKey(period);
 
-    // หากเข้าสู่รอบใหม่ ให้โหลดข้อมูลอีกครั้ง
-    if (nextPeriodKey !== lastPeriodKey) {
-      lastPeriodKey = nextPeriodKey;
+    const timerId = window.setInterval(() => {
+      const nextPeriodKey = getBangkokPeriodKey(period);
 
-      setReloadKey((key) => key + 1);
+      if (nextPeriodKey !== lastPeriodKey) {
+        lastPeriodKey = nextPeriodKey;
 
-      console.log(
-        `[Leaderboard] New ${period} period detected. Reloading rankings...`
+        setReloadKey((key) => key + 1);
+
+        console.log(
+          `[Leaderboard] New ${period} period detected. Reloading rankings...`
+        );
+      }
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [period]);
+
+  // ======================================================
+  // Countdown ถึงสิ้นสุดสัปดาห์และสิ้นเดือนตามเวลาไทย
+  // ======================================================
+  useEffect(() => {
+    function formatRemainingTime(endDate) {
+      const remaining = Math.max(
+        0,
+        endDate.getTime() - Date.now()
       );
+
+      const days = Math.floor(
+        remaining / (1000 * 60 * 60 * 24)
+      );
+
+      const hours = Math.floor(
+        (remaining % (1000 * 60 * 60 * 24)) /
+          (1000 * 60 * 60)
+      );
+
+      const minutes = Math.floor(
+        (remaining % (1000 * 60 * 60)) /
+          (1000 * 60)
+      );
+
+      return `เหลืออีก ${days} วัน ${hours} ชั่วโมง ${minutes} นาที`;
     }
-  }, 30_000);
 
-  return () => {
-    window.clearInterval(timerId);
-  };
-}, [period]);
- // ======================================================
-// Countdown ถึงสิ้นเดือนและสิ้นปีตามเวลาไทย
-// ======================================================
-useEffect(() => {
-  const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+    function updateCountdowns() {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+      }).formatToParts(new Date());
 
-  function formatRemainingTime(endDate) {
-    const remaining = Math.max(
-      0,
-      endDate.getTime() - Date.now()
+      const year = Number(
+        parts.find((part) => part.type === "year")?.value
+      );
+
+      const month = Number(
+        parts.find((part) => part.type === "month")?.value
+      );
+
+      const day = Number(
+        parts.find((part) => part.type === "day")?.value
+      );
+
+      // วันที่ปัจจุบันตามปฏิทินเวลาไทย
+      const bangkokDate = new Date(
+        Date.UTC(year, month - 1, day)
+      );
+
+      // หาวันจันทร์ของสัปดาห์ปัจจุบัน
+      const dayOfWeek = bangkokDate.getUTCDay();
+      const daysSinceMonday = (dayOfWeek + 6) % 7;
+
+      // เวลาเริ่มต้นของวันจันทร์สัปดาห์ถัดไป
+      const nextMondayTime =
+        Date.UTC(
+          year,
+          month - 1,
+          day - daysSinceMonday + 7
+        ) - BANGKOK_OFFSET_MS;
+
+      const endOfWeek = new Date(nextMondayTime);
+
+      // เวลาเริ่มต้นของเดือนถัดไป
+      const nextMonthTime =
+        Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
+
+      const endOfMonth = new Date(nextMonthTime);
+
+      setCountdowns({
+        weekly: formatRemainingTime(endOfWeek),
+        monthly: formatRemainingTime(endOfMonth),
+      });
+    }
+
+    updateCountdowns();
+
+    const timer = window.setInterval(
+      updateCountdowns,
+      60_000
     );
 
-    const days = Math.floor(
-      remaining / (1000 * 60 * 60 * 24)
-    );
-
-    const hours = Math.floor(
-      (remaining % (1000 * 60 * 60 * 24)) /
-        (1000 * 60 * 60)
-    );
-
-    const minutes = Math.floor(
-      (remaining % (1000 * 60 * 60)) /
-        (1000 * 60)
-    );
-
-    return `เหลืออีก ${days} วัน ${hours} ชั่วโมง ${minutes} นาที`;
-  }
-
-  function updateCountdowns() {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Bangkok",
-      year: "numeric",
-      month: "numeric",
-    }).formatToParts(new Date());
-
-    const year = Number(
-      parts.find((part) => part.type === "year")?.value
-    );
-
-    const month = Number(
-      parts.find((part) => part.type === "month")?.value
-    );
-
-    // เวลาเริ่มต้นของเดือนถัดไปในประเทศไทย
-    const endOfMonth = new Date(
-      Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS
-    );
-
-    // เวลาเริ่มต้นของปีถัดไปในประเทศไทย
-    const endOfYear = new Date(
-      Date.UTC(year + 1, 0, 1) - BANGKOK_OFFSET_MS
-    );
-
-    setCountdowns({
-      monthly: formatRemainingTime(endOfMonth),
-      yearly: formatRemainingTime(endOfYear),
-    });
-  }
-
-  updateCountdowns();
-
-  const timer = window.setInterval(
-    updateCountdowns,
-    60000
-  );
-
-  return () => window.clearInterval(timer);
-}, []);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // ======================================================
   // ของรางวัล TOP 1–3
@@ -294,7 +352,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* 1. Monthly / Yearly Tabs */}
+      {/* 1. Weekly / Monthly Tabs */}
       <div className="w-full shrink-0">
         <Tabs
           value={period}
@@ -310,7 +368,7 @@ useEffect(() => {
             "
           >
             <TabsTrigger
-              value="monthly"
+              value="weekly"
               className="
                 !h-auto min-h-[68px] min-w-0
                 flex flex-col items-center justify-center
@@ -326,16 +384,16 @@ useEffect(() => {
               "
             >
               <span className="text-xs font-bold text-gray-900 sm:text-sm">
-                Monthly
+                Weekly
               </span>
 
               <span className="text-center text-[10px] leading-snug text-gray-500">
-                {countdowns.monthly}
+                {countdowns.weekly}
               </span>
             </TabsTrigger>
 
             <TabsTrigger
-              value="yearly"
+              value="monthly"
               className="
                 !h-auto min-h-[68px] min-w-0
                 flex flex-col items-center justify-center
@@ -351,11 +409,11 @@ useEffect(() => {
               "
             >
               <span className="text-xs font-bold text-gray-900 sm:text-sm">
-                Yearly
+                Monthly
               </span>
 
               <span className="text-center text-[10px] leading-snug text-gray-500">
-                {countdowns.yearly}
+                {countdowns.monthly}
               </span>
             </TabsTrigger>
           </TabsList>
@@ -382,7 +440,9 @@ useEffect(() => {
             ของรางวัลสำหรับ TOP 1-3
 
             <span className="block">
-              {isMonthly ? "ประจำเดือนนี้" : "ประจำปี"}
+              {isWeekly
+                ? "ประจำสัปดาห์นี้"
+                : "ประจำเดือนนี้"}
             </span>
           </CardTitle>
         </CardHeader>
@@ -405,13 +465,13 @@ useEffect(() => {
                   bg-muted/40 shadow-md
                   sm:h-28 sm:w-28
                   ${
-                    isMonthly
+                    isWeekly
                       ? "border-orange-400"
                       : "border-indigo-300"
                   }
                 `}
               >
-                {isMonthly ? (
+                {isWeekly ? (
                   <span className="text-4xl">🔥</span>
                 ) : (
                   <Crown className="h-12 w-12 text-amber-500" />
@@ -420,11 +480,11 @@ useEffect(() => {
 
               <p className="mt-3 text-xs font-bold leading-relaxed">
                 เฟรมลิมิเต็ด
-                {isMonthly ? "ประจำเดือน" : "ประจำปี"}
+                {isWeekly ? "ประจำสัปดาห์" : "ประจำเดือน"}
 
                 <span className="block">
                   เฉพาะ
-                  {isMonthly ? "เดือนนี้" : "ปีนี้"}
+                  {isWeekly ? "สัปดาห์นี้" : "เดือนนี้"}
                   เท่านั้น!!
                 </span>
               </p>
@@ -463,9 +523,9 @@ useEffect(() => {
 
                   <span className="min-w-0 leading-snug">
                     นักรีวิว TOP {item.rank}
-                    {isMonthly
-                      ? " ประจำเดือน"
-                      : " ประจำปี"}
+                    {isWeekly
+                      ? " ประจำสัปดาห์"
+                      : " ประจำเดือน"}
                   </span>
                 </Badge>
               ))}

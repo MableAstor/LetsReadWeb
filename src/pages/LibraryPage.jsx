@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
+
 import {
   BookOpen,
   Bookmark,
-  ShoppingBag,
 } from "lucide-react";
 
 import WanttoRead from "../components/Wanttoread.jsx";
-import WanttoBuy from "../components/WanttoBuy";
 import Savebookfrom from "../components/Savebookfrom";
 
 import {
   viralBooks,
-  topBooks,
   savedBooks,
 } from "../data/books";
 
@@ -19,14 +17,17 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { supabase } from "../lib/supabase";
 
-// แก้รูปแบบ API_URL ให้เป็น URL ปกติ
+// API_URL
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
 
+// ======================================================
+// INITIAL LIBRARY
+// เหลือเพียง Saved Books และ Want to Read
+// ======================================================
 const initialLibrary = {
   wantToRead: [...viralBooks],
-  wantToBuy: savedBooks.slice(0, 2),
   savedBooks: [],
 };
 
@@ -40,11 +41,6 @@ const tabs = [
     value: "wantToRead",
     label: "Want to Read",
     icon: BookOpen,
-  },
-  {
-    value: "wantToBuy",
-    label: "Want to Buy",
-    icon: ShoppingBag,
   },
 ];
 
@@ -82,11 +78,14 @@ export default function LibraryPage() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/saved-reviews`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const response = await fetch(
+        `${API_URL}/saved-reviews`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
       const result = await response.json().catch(() => ({}));
 
@@ -101,7 +100,10 @@ export default function LibraryPage() {
         Array.isArray(result.reviews) ? result.reviews : []
       ).map((item) => {
         const title = item.Book_Title || "Untitled book";
-        const imageUrl = item.Image_URL || item.Books_Cover || "";
+
+        // ใช้รูปจากรีวิวก่อน ถ้าไม่มีให้ใช้รูปปกจาก Books
+        const imageUrl =
+          item.Image_URL || item.Books_Cover || "";
 
         const tags = [
           item.Main_Category,
@@ -121,7 +123,6 @@ export default function LibraryPage() {
 
           review: {
             // คงข้อมูลต้นฉบับจาก Backend
-            // เพื่อให้ ReviewCard แสดงรายละเอียดรีวิวได้ครบ
             ...item,
 
             // ข้อมูลที่ Savebookfrom ใช้งาน
@@ -166,7 +167,9 @@ export default function LibraryPage() {
     loadSavedBooks();
   }, [loadSavedBooks]);
 
+  // ======================================================
   // ตรวจสอบว่าเป็นรีวิวที่มาจากระบบ Save หรือไม่
+  // ======================================================
   const isSavedReview = (book) =>
     String(book?.id ?? "").startsWith("review-");
 
@@ -217,46 +220,6 @@ export default function LibraryPage() {
     }
   };
 
-  const sameBook = (a, b) =>
-    String(a?.id) === String(b?.id);
-
-  // ======================================================
-  // ย้ายหนังสือระหว่างแท็บ
-  // ======================================================
-  const moveBook = async (book, targetTab) => {
-    try {
-      // ถ้าเป็นรีวิวที่บันทึกจาก Feed ให้ยกเลิก Save ก่อน
-      await unsaveReviewOnServer(book);
-
-      setLibrary((prev) => {
-        const next = {
-          wantToRead: prev.wantToRead.filter(
-            (item) => !sameBook(item, book)
-          ),
-          wantToBuy: prev.wantToBuy.filter(
-            (item) => !sameBook(item, book)
-          ),
-          savedBooks: prev.savedBooks.filter(
-            (entry) => !sameBook(entry.book, book)
-          ),
-        };
-
-        if (targetTab === "wantToBuy") {
-          next.wantToBuy.push(book);
-        }
-
-        if (targetTab === "wantToRead") {
-          next.wantToRead.push(book);
-        }
-
-        return next;
-      });
-    } catch (error) {
-      console.error("[Library] Move book error:", error);
-      window.alert(error.message || "ย้ายหนังสือไม่สำเร็จ");
-    }
-  };
-
   // ======================================================
   // นำหนังสือออกจากรายการ
   // ======================================================
@@ -268,6 +231,7 @@ export default function LibraryPage() {
         "[Library] ไม่พบ ID ของหนังสือที่ต้องการลบ",
         book
       );
+
       window.alert("ไม่พบข้อมูลรีวิวที่ต้องการลบ");
       return;
     }
@@ -347,7 +311,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-white/70 p-2 shadow-sm">
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white/70 p-2 shadow-sm">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = activeTab === tab.value;
@@ -430,9 +394,6 @@ export default function LibraryPage() {
                 key={entry.book.id}
                 book={entry.book}
                 review={entry.review}
-                onMoveToWantToBuy={(book) =>
-                  moveBook(book, "wantToBuy")
-                }
                 onMarkAsRead={markAsRead}
                 onRemove={(book) =>
                   removeBook("savedBooks", book)
@@ -445,19 +406,10 @@ export default function LibraryPage() {
               <WanttoRead
                 key={book.id}
                 book={book}
-                onMoveToWantToBuy={(item) =>
-                  moveBook(item, "wantToBuy")
-                }
                 onMarkAsRead={markAsRead}
-                onRemove={(book) => removeBook("wantToRead", book)}
-              />
-            ))}
-
-          {activeTab === "wantToBuy" &&
-            library.wantToBuy.map((book) => (
-              <WanttoBuy
-                key={book.id}
-                book={book}
+                onRemove={(book) =>
+                  removeBook("wantToRead", book)
+                }
               />
             ))}
         </div>

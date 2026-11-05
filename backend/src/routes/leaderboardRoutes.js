@@ -10,29 +10,46 @@ const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 // ======================================================
 // คำนวณช่วงเวลาของ Leaderboard ตามเวลาไทย
 //
+// Weekly:
+// เริ่มวันจันทร์ เวลา 00:00 น. ของสัปดาห์ปัจจุบัน
+//
 // Monthly:
-// เริ่มวันที่ 1 ของเดือนปัจจุบัน
+// เริ่มวันที่ 1 เวลา 00:00 น. ของเดือนปัจจุบัน
 //
-// Yearly:
-// เริ่มวันที่ 1 มกราคมของปีปัจจุบัน
-//
-// เมื่อขึ้นเดือนหรือปีใหม่ ระบบจะเปลี่ยนช่วงเวลา
+// เมื่อขึ้นสัปดาห์หรือเดือนใหม่ ระบบจะเปลี่ยนช่วงเวลา
 // ที่ใช้คำนวณคะแนนให้อัตโนมัติ
 // ======================================================
 function getPeriodStart(period, now) {
-  // แปลงเวลาปัจจุบันเป็นเวลาไทยเพื่อหาวันและเดือน
+  // แปลงเวลาปัจจุบันเป็นเวลาไทย
   const bangkokNow = new Date(
     now.getTime() + BANGKOK_OFFSET_MS
   );
 
   const year = bangkokNow.getUTCFullYear();
   const month = bangkokNow.getUTCMonth();
+  const date = bangkokNow.getUTCDate();
 
-  // คำนวณเวลาเริ่มต้นของรอบ โดยแปลงกลับเป็น UTC
-  const startTime =
-    period === "monthly"
-      ? Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS
-      : Date.UTC(year, 0, 1) - BANGKOK_OFFSET_MS;
+  let startTime;
+
+  if (period === "weekly") {
+    // หาวันจันทร์ของสัปดาห์ปัจจุบัน
+    const dayOfWeek = bangkokNow.getUTCDay();
+
+    // Sunday = 0, Monday = 1, ..., Saturday = 6
+    const daysSinceMonday = (dayOfWeek + 6) % 7;
+
+    // คำนวณเวลาเริ่มต้นวันจันทร์ 00:00 น. เวลาไทย
+    startTime =
+      Date.UTC(
+        year,
+        month,
+        date - daysSinceMonday
+      ) - BANGKOK_OFFSET_MS;
+  } else {
+    // คำนวณเวลาเริ่มต้นวันที่ 1 ของเดือน เวลาไทย
+    startTime =
+      Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
+  }
 
   return new Date(startTime).toISOString();
 }
@@ -40,10 +57,10 @@ function getPeriodStart(period, now) {
 // ======================================================
 // GET LEADERBOARD
 //
+// GET /api/auth/leaderboard?period=weekly
 // GET /api/auth/leaderboard?period=monthly
-// GET /api/auth/leaderboard?period=yearly
 //
-// นับเฉพาะรีวิวที่สร้างในรอบที่เลือก
+// นับเฉพาะรีวิวที่สร้างในช่วงเวลาที่เลือก
 // ไม่ลบรีวิวเก่าจากฐานข้อมูล
 // ======================================================
 router.get("/leaderboard", async (req, res) => {
@@ -51,10 +68,10 @@ router.get("/leaderboard", async (req, res) => {
     const { period } = req.query;
 
     // ตรวจสอบประเภทของอันดับ
-    if (!["monthly", "yearly"].includes(period)) {
+    if (!["weekly", "monthly"].includes(period)) {
       return res.status(400).json({
         success: false,
-        message: "period ต้องเป็น monthly หรือ yearly",
+        message: "period ต้องเป็น weekly หรือ monthly",
       });
     }
 
@@ -89,9 +106,8 @@ router.get("/leaderboard", async (req, res) => {
     // --------------------------------------------------
     // 2. กำหนดช่วงเวลาของอันดับ
     // --------------------------------------------------
-    // ใช้เวลาปัจจุบันเพียงครั้งเดียว เพื่อให้การนับคะแนน
-    // ของคำขอนี้ใช้ขอบเขตเวลาเดียวกันทั้งหมด
     const now = new Date();
+
     const periodStart = getPeriodStart(period, now);
     const periodEnd = now.toISOString();
 
@@ -111,11 +127,13 @@ router.get("/leaderboard", async (req, res) => {
     // --------------------------------------------------
     // 4. โหลดรีวิวเฉพาะในช่วงเวลาที่เลือก
     //
-    // Monthly = ตั้งแต่ต้นเดือนจนถึงเวลาปัจจุบัน
-    // Yearly  = ตั้งแต่ต้นปีจนถึงเวลาปัจจุบัน
+    // Weekly:
+    // ตั้งแต่วันจันทร์ 00:00 น. จนถึงปัจจุบัน
     //
-    // โหลดเป็นชุดละ 1,000 รายการเพื่อรองรับ
-    // กรณีมีรีวิวมากกว่า 1,000 รายการ
+    // Monthly:
+    // ตั้งแต่วันที่ 1 เวลา 00:00 น. จนถึงปัจจุบัน
+    //
+    // โหลดเป็นชุดละ 1,000 รายการ
     // --------------------------------------------------
     const reviewRows = [];
     let offset = 0;
@@ -183,8 +201,7 @@ router.get("/leaderboard", async (req, res) => {
           return b.reviews - a.reviews;
         }
 
-        // หากคะแนนเท่ากัน ให้เรียงตามชื่อเพื่อกำหนด
-        // ลำดับให้แน่นอนและไม่เปลี่ยนแบบสุ่ม
+        // หากคะแนนเท่ากัน ให้เรียงตามชื่อ
         const nameComparison = a.name.localeCompare(
           b.name,
           "th"

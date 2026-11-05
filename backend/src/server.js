@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoutes.js";
 import feedRoutes from "./routes/feedRoutes.js";
 import libraryRoutes from "./routes/libraryRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
+import homeRoutes from "./routes/homeRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -43,6 +44,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/auth", feedRoutes);
 app.use("/api/auth", libraryRoutes);
 app.use("/api/auth", leaderboardRoutes);
+app.use("/api/auth", homeRoutes);
 app.get("/", (req, res) => {
   res.json({
     message: "Let's Read Backend is running",
