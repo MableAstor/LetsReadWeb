@@ -8,6 +8,7 @@ const router = express.Router();
 // GET REVIEWS
 // ดึงรีวิว ชื่อผู้รีวิว จำนวนหัวใจ และสถานะ Like / Save
 // ======================================================
+
 router.get("/reviews/test", async (req, res) => {
   try {
     const { data: reviews, error: reviewsError } =
@@ -101,6 +102,7 @@ router.get("/reviews/test", async (req, res) => {
     // ======================================================
     // ดึงจำนวนหัวใจของแต่ละรีวิว
     // ======================================================
+
     let likes = [];
 
     if (reviewIds.length > 0) {
@@ -131,6 +133,7 @@ router.get("/reviews/test", async (req, res) => {
     // ======================================================
     // ตรวจสอบผู้ใช้ปัจจุบันจาก Access Token
     // ======================================================
+
     let currentUserId = null;
 
     const authHeader = req.headers.authorization;
@@ -160,6 +163,7 @@ router.get("/reviews/test", async (req, res) => {
     // ======================================================
     // ตรวจสอบรีวิวที่ผู้ใช้กด Like ไว้
     // ======================================================
+
     const likedReviewIds = new Set();
 
     if (currentUserId !== null) {
@@ -175,6 +179,7 @@ router.get("/reviews/test", async (req, res) => {
     // ======================================================
     // ตรวจสอบรีวิวที่ผู้ใช้ Save ไว้
     // ======================================================
+
     const savedReviewIds = new Set();
 
     if (
@@ -200,6 +205,7 @@ router.get("/reviews/test", async (req, res) => {
     // ======================================================
     // ดึงรูปปกหนังสือจากตาราง Books โดยใช้ BooksID
     // ======================================================
+
     const bookIds = [
       ...new Set(
         reviews
@@ -235,6 +241,7 @@ router.get("/reviews/test", async (req, res) => {
     // รวมข้อมูลรีวิว ชื่อผู้ใช้ รูปโปรไฟล์ กรอบ
     // รูปปก Like และ Save
     // ======================================================
+
     const formattedReviews = reviews.map((review) => {
       const reviewKey = String(review.ReviewsID);
 
@@ -282,8 +289,14 @@ router.get("/reviews/test", async (req, res) => {
 // POST REVIEW
 // รองรับทั้งหนังสือเดิมและการเพิ่มหนังสือใหม่
 // ======================================================
+
 router.post("/reviews/test", async (req, res) => {
   let createdBookId = null;
+
+  // เก็บข้อมูลความสัมพันธ์หมวดรองที่เพิ่งเพิ่ม
+  // เพื่อใช้ Cleanup หากบันทึกรีวิวไม่สำเร็จ
+  let subcategoryBookId = null;
+  let insertedSubcategoryIds = [];
 
   try {
     const {
@@ -291,6 +304,7 @@ router.post("/reviews/test", async (req, res) => {
       newBook,
       mainCategory,
       subCategory,
+      subCategories,
       rating,
       reviewText,
       imageUrl,
@@ -299,6 +313,7 @@ router.post("/reviews/test", async (req, res) => {
     // ======================================================
     // 1. ตรวจสอบ Access Token
     // ======================================================
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -323,6 +338,7 @@ router.post("/reviews/test", async (req, res) => {
     // ======================================================
     // 2. ตรวจสอบหมวดหมู่หลักและแปลงเป็น CategoriseID
     // ======================================================
+
     const categoryIds = {
       Mystery: 1,
       Fantasy: 2,
@@ -344,15 +360,66 @@ router.post("/reviews/test", async (req, res) => {
     }
 
     // ======================================================
-    // 3. ตรวจสอบข้อมูลรีวิว
+    // 3. ตรวจสอบข้อมูลรีวิวและหมวดหมู่รอง
     // ======================================================
+
+    const allowedSubCategories = [
+      "Drama",
+      "Feel Good",
+      "Comedy",
+      "Adventure",
+      "Action",
+      "Psychological",
+      "Suspense",
+      "Dark",
+      "Slice of Life",
+      "Supernatural",
+    ];
+
+    // รองรับ Frontend ใหม่ที่ส่ง Array
+    // และ Frontend เดิมที่ส่งข้อความ subCategory
+    const rawSubCategories = Array.isArray(subCategories)
+      ? subCategories
+      : String(subCategory || "").split(",");
+
+    // ตัดช่องว่างและป้องกันชื่อหมวดซ้ำ
+    const selectedSubCategories = [
+      ...new Set(
+        rawSubCategories
+          .map((item) => String(item).trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    // ต้องเลือกอย่างน้อย 1 และไม่เกิน 3 หมวด
     if (
-      !subCategory ||
-      !reviewText?.trim()
+      selectedSubCategories.length < 1 ||
+      selectedSubCategories.length > 3
     ) {
       return res.status(400).json({
         success: false,
-        message: "กรุณากรอกหมวดหมู่และข้อความรีวิวให้ครบ",
+        message: "กรุณาเลือกหมวดรองตั้งแต่ 1 ถึง 3 หมวด",
+      });
+    }
+
+    // ตรวจสอบชื่อหมวดรอง
+    const invalidSubCategories =
+      selectedSubCategories.filter(
+        (category) =>
+          !allowedSubCategories.includes(category)
+      );
+
+    if (invalidSubCategories.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `พบหมวดรองที่ไม่ถูกต้อง: ${invalidSubCategories.join(", ")}`,
+      });
+    }
+
+    if (!reviewText?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "กรุณากรอกข้อความรีวิว",
       });
     }
 
@@ -372,6 +439,7 @@ router.post("/reviews/test", async (req, res) => {
     // ======================================================
     // 4. ค้นหาหรือสร้างโปรไฟล์ผู้ใช้
     // ======================================================
+
     const userProfile = await getOrCreateUserProfile(
       authData.user
     );
@@ -382,6 +450,7 @@ router.post("/reviews/test", async (req, res) => {
     // 5. กรณีเพิ่มหนังสือใหม่
     // ไม่ต้องส่ง BooksID มา
     // ======================================================
+
     if (newBook !== null && newBook !== undefined) {
       if (
         typeof newBook !== "object" ||
@@ -406,6 +475,7 @@ router.post("/reviews/test", async (req, res) => {
 
       // 5.1 ตรวจสอบชื่อหนังสือซ้ำในฐานข้อมูล
       // ใช้ ilike เพื่อตรวจชื่อที่ตัวพิมพ์เล็ก/ใหญ่ต่างกันด้วย
+
       const escapedTitle = title.replace(/[\\%_]/g, "\\$&");
 
       const {
@@ -442,6 +512,7 @@ router.post("/reviews/test", async (req, res) => {
       }
 
       // 5.2 เพิ่มข้อมูลหนังสือในตาราง Books
+
       const { data: insertedBook, error: insertBookError } =
         await supabaseAdmin
           .from("Books")
@@ -467,6 +538,7 @@ router.post("/reviews/test", async (req, res) => {
 
       // 5.3 เชื่อมหนังสือกับหมวดหมู่หลัก
       // ตาราง Book_Categorise มี BooksID และ CategoriseID
+
       const { error: categoryLinkError } =
         await supabaseAdmin
           .from("Book_Categorise")
@@ -482,6 +554,7 @@ router.post("/reviews/test", async (req, res) => {
       // ======================================================
       // 6. กรณีเลือกหนังสือที่มีอยู่แล้ว
       // ======================================================
+
       const bookId = Number(BooksID);
 
       if (!Number.isSafeInteger(bookId) || bookId <= 0) {
@@ -518,8 +591,109 @@ router.post("/reviews/test", async (req, res) => {
     }
 
     // ======================================================
+    // 6.5 เชื่อมหนังสือกับหมวดหมู่รอง
+    // บันทึกลง Book_Subcategorise
+    // ======================================================
+
+    subcategoryBookId = selectedBook.BooksID;
+
+    // 6.5.1 ค้นหา SubcategoriseID จากชื่อหมวดรอง
+
+    const {
+      data: subcategoryRows,
+      error: subcategoryError,
+    } = await supabaseAdmin
+      .from("Subcategorise")
+      .select("SubcategoriseID, Subcategorise_Name")
+      .in("Subcategorise_Name", selectedSubCategories);
+
+    if (subcategoryError) {
+      throw subcategoryError;
+    }
+
+    // จับคู่ชื่อหมวดรองกับ ID
+    const subcategoryMap = new Map(
+      (subcategoryRows || []).map((item) => [
+        String(item.Subcategorise_Name).trim(),
+        item.SubcategoriseID,
+      ])
+    );
+
+    // ตรวจสอบว่าทุกหมวดมีอยู่ในฐานข้อมูล
+    const missingSubCategories = selectedSubCategories.filter(
+      (category) => !subcategoryMap.has(category)
+    );
+
+    if (missingSubCategories.length > 0) {
+      throw new Error(
+        `ไม่พบหมวดรองในฐานข้อมูล: ${missingSubCategories.join(", ")}`
+      );
+    }
+
+    // 6.5.2 แปลงชื่อหมวดรองเป็น ID
+
+    const selectedSubcategoryIds = selectedSubCategories.map(
+      (category) => subcategoryMap.get(category)
+    );
+
+    // 6.5.3 ตรวจสอบความสัมพันธ์ที่มีอยู่แล้ว
+
+    const {
+      data: existingSubcategoryLinks,
+      error: existingLinksError,
+    } = await supabaseAdmin
+      .from("Book_Subcategorise")
+      .select("SubcategoriseID")
+      .eq("BooksID", selectedBook.BooksID)
+      .in("SubcategoriseID", selectedSubcategoryIds);
+
+    if (existingLinksError) {
+      throw existingLinksError;
+    }
+
+    // เก็บ ID ที่บันทึกไว้แล้ว
+    const existingSubcategoryIds = new Set(
+      (existingSubcategoryLinks || []).map((item) =>
+        String(item.SubcategoriseID)
+      )
+    );
+
+    // 6.5.4 เลือกเฉพาะหมวดที่ยังไม่เคยเชื่อมกับหนังสือ
+
+    const newSubcategoryLinks = selectedSubcategoryIds
+      .filter(
+        (id) => !existingSubcategoryIds.has(String(id))
+      )
+      .map((id) => ({
+        BooksID: selectedBook.BooksID,
+        SubcategoriseID: id,
+      }));
+
+    // 6.5.5 บันทึกเฉพาะความสัมพันธ์ที่ยังไม่มี
+
+    if (newSubcategoryLinks.length > 0) {
+      const {
+        data: insertedLinks,
+        error: insertLinksError,
+      } = await supabaseAdmin
+        .from("Book_Subcategorise")
+        .insert(newSubcategoryLinks)
+        .select("SubcategoriseID");
+
+      if (insertLinksError) {
+        throw insertLinksError;
+      }
+
+      // เก็บ ID ที่เพิ่งเพิ่มไว้สำหรับ Cleanup
+      insertedSubcategoryIds = (insertedLinks || []).map(
+        (item) => item.SubcategoriseID
+      );
+    }
+
+    // ======================================================
     // 7. บันทึกรีวิวลงตาราง Reviews
     // ======================================================
+
     const { data: newReview, error: reviewError } =
       await supabaseAdmin
         .from("Reviews")
@@ -528,7 +702,11 @@ router.post("/reviews/test", async (req, res) => {
           BooksID: selectedBook.BooksID,
           Book_Title: selectedBook.Books_title,
           Main_Category: categoryName,
-          Sub_Category: subCategory.trim(),
+
+          // เก็บชื่อหมวดรองรวมเป็นข้อความ
+          // เพื่อให้ Feed เดิมยังแสดงผลได้
+          Sub_Category: selectedSubCategories.join(", "),
+
           Review_Text: reviewText.trim(),
           Rating: numericRating,
           Image_URL: imageUrl || null,
@@ -563,8 +741,33 @@ router.post("/reviews/test", async (req, res) => {
   } catch (error) {
     console.error("[REVIEW] Save error:", error);
 
+    // ======================================================
+    // Cleanup ความสัมพันธ์หมวดรองที่เพิ่งเพิ่ม
+    // ไม่ลบความสัมพันธ์เดิมของหนังสือ
+    // ======================================================
+
+    if (
+      subcategoryBookId !== null &&
+      insertedSubcategoryIds.length > 0
+    ) {
+      const { error: cleanupSubcategoryError } =
+        await supabaseAdmin
+          .from("Book_Subcategorise")
+          .delete()
+          .eq("BooksID", subcategoryBookId)
+          .in("SubcategoriseID", insertedSubcategoryIds);
+
+      if (cleanupSubcategoryError) {
+        console.error(
+          "[REVIEW] Cleanup subcategory error:",
+          cleanupSubcategoryError
+        );
+      }
+    }
+
     // หากเพิ่มหนังสือใหม่แล้วขั้นตอนหลังจากนั้นล้มเหลว
     // ลบความสัมพันธ์และหนังสือที่เพิ่งสร้าง
+
     if (createdBookId !== null) {
       const { error: cleanupCategoryError } =
         await supabaseAdmin
@@ -605,6 +808,7 @@ router.post("/reviews/test", async (req, res) => {
 // LIKE / UNLIKE REVIEW
 // ผู้ใช้หนึ่งคนกดใจรีวิวเดียวกันได้หนึ่งครั้ง
 // ======================================================
+
 router.post("/reviews/:reviewId/like", async (req, res) => {
   try {
     const { reviewId } = req.params;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { Camera, Star, X } from "lucide-react";
+import { Camera, Star, X, ChevronDown } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
 
@@ -40,6 +40,24 @@ const ALLOWED_IMAGE_TYPES = [
   "image/gif",
 ];
 
+// ======================================================
+// รายการหมวดหมู่รอง
+// เลือกได้สูงสุด 3 หมวด
+// ======================================================
+
+const SUBCATEGORY_OPTIONS = [
+  "Drama",
+  "Feel Good",
+  "Comedy",
+  "Adventure",
+  "Action",
+  "Psychological",
+  "Suspense",
+  "Dark",
+  "Slice of Life",
+  "Supernatural",
+];
+
 export default function WriteReviewModal({
   onClose,
   onReviewPosted,
@@ -69,7 +87,12 @@ export default function WriteReviewModal({
 
   // ข้อมูลรีวิว
   const [mainCategory, setMainCategory] = useState("");
-  const [subCategory, setSubCategory] = useState("");
+
+  // หมวดรอง เลือกได้ 1-3 หมวด
+  const [subCategories, setSubCategories] = useState([]);
+  const [subCategoryDropdownOpen, setSubCategoryDropdownOpen] =
+    useState(false);
+
   const [reviewText, setReviewText] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +101,7 @@ export default function WriteReviewModal({
   // ======================================================
   // ค้นหาหนังสือจากตาราง Books
   // ======================================================
+
   useEffect(() => {
     const search = bookSearch.trim();
 
@@ -139,6 +163,7 @@ export default function WriteReviewModal({
   // ======================================================
   // Preview รูปประกอบรีวิว
   // ======================================================
+
   useEffect(() => {
     if (!imageFile) {
       setImagePreview(null);
@@ -157,6 +182,7 @@ export default function WriteReviewModal({
   // ======================================================
   // Preview รูปปกหนังสือใหม่
   // ======================================================
+
   useEffect(() => {
     if (!bookCoverFile) {
       setBookCoverPreview(null);
@@ -175,6 +201,7 @@ export default function WriteReviewModal({
   // ======================================================
   // เลือกหนังสือที่มีอยู่แล้ว
   // ======================================================
+
   const handleSelectBook = (book) => {
     setSelectedBook(book);
     setBookSearch(book.Books_title || "");
@@ -188,6 +215,7 @@ export default function WriteReviewModal({
   // ======================================================
   // เปลี่ยนหนังสือที่เลือก
   // ======================================================
+
   const handleChangeBook = () => {
     setSelectedBook(null);
     setBookSearch("");
@@ -200,6 +228,7 @@ export default function WriteReviewModal({
   // ======================================================
   // เริ่มเพิ่มหนังสือใหม่
   // ======================================================
+
   const handleStartAddBook = () => {
     setIsAddingNewBook(true);
     setNewBookTitle(bookSearch.trim());
@@ -215,6 +244,7 @@ export default function WriteReviewModal({
   // ======================================================
   // ยกเลิกการเพิ่มหนังสือใหม่
   // ======================================================
+
   const handleCancelAddBook = () => {
     setIsAddingNewBook(false);
     setNewBookTitle("");
@@ -225,8 +255,31 @@ export default function WriteReviewModal({
   };
 
   // ======================================================
+  // เลือกหมวดรองได้สูงสุด 3 หมวด
+  // ======================================================
+
+  const handleSubCategoryToggle = (category) => {
+    setSubCategories((current) => {
+      // ถ้าเลือกอยู่แล้ว ให้ยกเลิกการเลือก
+      if (current.includes(category)) {
+        return current.filter((item) => item !== category);
+      }
+
+      // จำกัดจำนวนสูงสุด 3 หมวด
+      if (current.length >= 3) {
+        return current;
+      }
+
+      return [...current, category];
+    });
+
+    setErrorMessage("");
+  };
+
+  // ======================================================
   // ตรวจสอบไฟล์รูปประกอบรีวิว
   // ======================================================
+
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
 
@@ -253,6 +306,7 @@ export default function WriteReviewModal({
   // ======================================================
   // ตรวจสอบไฟล์รูปปกหนังสือ
   // ======================================================
+
   const handleBookCoverChange = (e) => {
     const file = e.target.files?.[0];
 
@@ -279,6 +333,7 @@ export default function WriteReviewModal({
   // ======================================================
   // อัปโหลดรูปประกอบรีวิว
   // ======================================================
+
   const uploadReviewImage = async (file, userId) => {
     const extensionByType = {
       "image/jpeg": "jpg",
@@ -324,6 +379,7 @@ export default function WriteReviewModal({
   // ======================================================
   // อัปโหลดรูปปกหนังสือ
   // ======================================================
+
   const uploadBookCover = async (file, userId) => {
     const extensionByType = {
       "image/jpeg": "jpg",
@@ -369,6 +425,7 @@ export default function WriteReviewModal({
   // ======================================================
   // ตรวจสอบชื่อหนังสือซ้ำ
   // ======================================================
+
   const checkDuplicateBook = async (title) => {
     const response = await fetch(
       `${API_URL}/library/books?search=${encodeURIComponent(title)}`
@@ -399,6 +456,7 @@ export default function WriteReviewModal({
   // ======================================================
   // บันทึกรีวิวและหนังสือใหม่ (ถ้ามี)
   // ======================================================
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -434,6 +492,21 @@ export default function WriteReviewModal({
       return;
     }
 
+    // ตรวจสอบหมวดรอง
+    if (subCategories.length === 0) {
+      setErrorMessage(
+        "กรุณาเลือกหมวดหมู่รองอย่างน้อย 1 หมวด"
+      );
+      return;
+    }
+
+    if (subCategories.length > 3) {
+      setErrorMessage(
+        "เลือกหมวดหมู่รองได้สูงสุด 3 หมวด"
+      );
+      return;
+    }
+
     if (rating < 1 || rating > 5) {
       setErrorMessage("กรุณาเลือกคะแนน 1–5 ดาว");
       return;
@@ -465,6 +538,7 @@ export default function WriteReviewModal({
       // 2. ตรวจสอบชื่อหนังสือซ้ำก่อนอัปโหลดรูป
       // ทำเฉพาะกรณีเพิ่มหนังสือใหม่
       // ======================================================
+
       if (isAddingNewBook) {
         const duplicate = await checkDuplicateBook(
           newBookTitle
@@ -482,6 +556,7 @@ export default function WriteReviewModal({
       // ======================================================
       // 3. อัปโหลดรูปปก หากเป็นหนังสือใหม่
       // ======================================================
+
       let newBook = null;
 
       if (isAddingNewBook) {
@@ -500,6 +575,7 @@ export default function WriteReviewModal({
       // ======================================================
       // 4. อัปโหลดรูปประกอบรีวิว หากมี
       // ======================================================
+
       let imageUrl = null;
 
       if (imageFile) {
@@ -512,6 +588,7 @@ export default function WriteReviewModal({
       // ======================================================
       // 5. ส่งข้อมูลไป Backend
       // ======================================================
+
       const response = await fetch(
         `${API_URL}/reviews/test`,
         {
@@ -528,7 +605,14 @@ export default function WriteReviewModal({
             newBook,
 
             mainCategory,
-            subCategory: subCategory.trim(),
+
+            // ส่งหมวดรองเป็น Array สำหรับบันทึก Book_Subcategorise
+            subCategories,
+
+            // ส่งชื่อหมวดรองรวมเป็นข้อความด้วย
+            // เพื่อให้ Reviews.Sub_Category และ Feed เดิมยังใช้งานได้
+            subCategory: subCategories.join(", "),
+
             rating,
             reviewText: reviewText.trim(),
             imageUrl,
@@ -541,6 +625,7 @@ export default function WriteReviewModal({
       // ======================================================
       // 6. กรณี Backend ตรวจพบชื่อซ้ำ
       // ======================================================
+
       if (
         response.status === 409 &&
         result.code === "BOOK_ALREADY_EXISTS" &&
@@ -560,6 +645,7 @@ export default function WriteReviewModal({
       // ======================================================
       // 7. ตรวจสอบและปลดล็อกรางวัลหลังบันทึกรีวิวสำเร็จ
       // ======================================================
+
       try {
         const rewardResponse = await fetch(
           `${API_URL}/rewards/check`,
@@ -594,6 +680,7 @@ export default function WriteReviewModal({
       // ======================================================
       // 8. รีเฟรชข้อมูล Feed
       // ======================================================
+
       if (onReviewPosted) {
         await onReviewPosted();
       }
@@ -1055,22 +1142,148 @@ export default function WriteReviewModal({
                 </Select>
               </div>
 
-              {/* Subcategory - unchanged */}
+              {/* ======================================================
+                  Subcategory Dropdown
+                  เลือกได้สูงสุด 3 หมวด
+                 ====================================================== */}
+
               <div className="space-y-2">
-                <Label htmlFor="sub-category">
-                  Subcategory
+                <Label>
+                  Subcategory (เลือกได้สูงสุด 3 หมวด)
                 </Label>
 
-                <Input
-                  id="sub-category"
-                  placeholder="Enter subcategory..."
-                  value={subCategory}
-                  onChange={(e) =>
-                    setSubCategory(e.target.value)
-                  }
-                  maxLength={100}
-                  disabled={submitting}
-                />
+                <div className="relative">
+                  {/* ปุ่มเปิด Dropdown */}
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() =>
+                      setSubCategoryDropdownOpen((open) => !open)
+                    }
+                    aria-expanded={subCategoryDropdownOpen}
+                    aria-haspopup="true"
+                    className="
+                      flex min-h-10 w-full items-center
+                      justify-between gap-2 rounded-md
+                      border border-input bg-background
+                      px-3 py-2 text-left text-sm
+                      transition-colors hover:bg-muted/40
+                      focus-visible:outline-none
+                      focus-visible:ring-2 focus-visible:ring-ring
+                      disabled:cursor-not-allowed disabled:opacity-50
+                    "
+                  >
+                    <span
+                      className={`min-w-0 truncate ${
+                        subCategories.length === 0
+                          ? "text-muted-foreground"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {subCategories.length > 0
+                        ? subCategories.join(", ")
+                        : "Select subcategories..."}
+                    </span>
+
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      {subCategories.length}/3
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          subCategoryDropdownOpen
+                            ? "rotate-180"
+                            : ""
+                        }`}
+                      />
+                    </span>
+                  </button>
+
+                  {/* รายการ Dropdown */}
+                  {subCategoryDropdownOpen && (
+                    <div
+                      className="
+                        absolute left-0 top-full z-50 mt-1
+                        max-h-60 w-full overflow-y-auto
+                        rounded-lg border border-border
+                        bg-popover p-2 text-popover-foreground
+                        shadow-lg
+                      "
+                    >
+                      {SUBCATEGORY_OPTIONS.map((category) => {
+                        const checked =
+                          subCategories.includes(category);
+
+                        const disabled =
+                          submitting ||
+                          (!checked && subCategories.length >= 3);
+
+                        return (
+                          <label
+                            key={category}
+                            className={`
+                              flex items-center gap-3
+                              rounded-md px-3 py-2 text-sm
+                              transition-colors
+                              ${
+                                disabled
+                                  ? "cursor-not-allowed opacity-40"
+                                  : "cursor-pointer hover:bg-muted"
+                              }
+                            `}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={() =>
+                                handleSubCategoryToggle(category)
+                              }
+                              className="
+                                h-4 w-4 shrink-0
+                                cursor-pointer accent-pink-500
+                                disabled:cursor-not-allowed
+                              "
+                            />
+
+                            <span>{category}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* แสดงหมวดที่เลือก */}
+                {subCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {subCategories.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        disabled={submitting}
+                        onClick={() =>
+                          handleSubCategoryToggle(category)
+                        }
+                        className="
+                          inline-flex items-center gap-1
+                          rounded-full bg-pink-50
+                          px-3 py-1 text-xs font-medium
+                          text-pink-700 transition-colors
+                          hover:bg-pink-100
+                          disabled:opacity-50
+                        "
+                      >
+                        {category}
+                        <X className="h-3 w-3" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  เลือกแล้ว {subCategories.length}/3 หมวด
+                  {subCategories.length === 3 &&
+                    " (เลือกครบแล้ว)"}
+                </p>
               </div>
 
               {/* Rating */}
