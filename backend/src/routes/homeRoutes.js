@@ -8,37 +8,23 @@ const BOOK_BATCH_SIZE = 500;
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 // ======================================================
-// คำนวณเวลาเริ่มต้นของ Viral ตามเวลาไทย
+// คำนวณเวลาเริ่มต้นของ Viral รายเดือนตามเวลาไทย
 //
-// Weekly: วันจันทร์ เวลา 00:00 น.
 // Monthly: วันที่ 1 เวลา 00:00 น.
+// เมื่อขึ้นเดือนใหม่ ระบบจะเปลี่ยนช่วงเวลาคำนวณอัตโนมัติ
 // ======================================================
-function getViralPeriodStart(period, now) {
+
+function getViralMonthStart(now) {
   const bangkokNow = new Date(
     now.getTime() + BANGKOK_OFFSET_MS
   );
 
   const year = bangkokNow.getUTCFullYear();
   const month = bangkokNow.getUTCMonth();
-  const date = bangkokNow.getUTCDate();
 
-  let startTime;
-
-  if (period === "weekly") {
-    const dayOfWeek = bangkokNow.getUTCDay();
-
-    const daysSinceMonday = (dayOfWeek + 6) % 7;
-
-    startTime =
-      Date.UTC(
-        year,
-        month,
-        date - daysSinceMonday
-      ) - BANGKOK_OFFSET_MS;
-  } else {
-    startTime =
-      Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
-  }
+  // เวลาเริ่มต้นวันที่ 1 ของเดือน เวลาไทย
+  const startTime =
+    Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
 
   return new Date(startTime).toISOString();
 }
@@ -46,28 +32,28 @@ function getViralPeriodStart(period, now) {
 // ======================================================
 // GET VIRAL BOOKS
 //
-// GET /api/auth/viral-books?period=weekly
-// GET /api/auth/viral-books?period=monthly
+// GET /api/auth/viral-books
+//
+// นับจำนวนรีวิวเฉพาะเดือนปัจจุบัน
+// เริ่มวันที่ 1 เวลา 00:00 น. ตามเวลาไทย
 // ======================================================
+
 router.get("/viral-books", async (req, res) => {
   try {
-    const { period } = req.query;
+    // ======================================================
+    // 1. กำหนดช่วงเวลารายเดือน
+    // ======================================================
 
-    // 1. ตรวจสอบช่วงเวลา
-    if (!["weekly", "monthly"].includes(period)) {
-      return res.status(400).json({
-        success: false,
-        message: "period ต้องเป็น weekly หรือ monthly",
-      });
-    }
-
-    // 2. กำหนดช่วงเวลา
     const now = new Date();
 
-    const periodStart = getViralPeriodStart(period, now);
+    const periodStart = getViralMonthStart(now);
     const periodEnd = now.toISOString();
 
-    // 3. ดึงรีวิวตามช่วงเวลาที่เลือก
+    // ======================================================
+    // 2. ดึงรีวิวเฉพาะเดือนปัจจุบัน
+    // โหลดข้อมูลเป็นชุดละ 1,000 รายการ
+    // ======================================================
+
     const reviewRows = [];
     let offset = 0;
 
@@ -91,6 +77,7 @@ router.get("/viral-books", async (req, res) => {
 
       reviewRows.push(...rows);
 
+      // หากข้อมูลในชุดนี้ไม่เต็ม แสดงว่าโหลดครบแล้ว
       if (rows.length < PAGE_SIZE) {
         break;
       }
@@ -98,7 +85,10 @@ router.get("/viral-books", async (req, res) => {
       offset += PAGE_SIZE;
     }
 
-    // 4. นับจำนวนรีวิวตาม BooksID
+    // ======================================================
+    // 3. นับจำนวนรีวิวตาม BooksID
+    // ======================================================
+
     const reviewCountMap = new Map();
 
     for (const review of reviewRows) {
@@ -110,11 +100,11 @@ router.get("/viral-books", async (req, res) => {
       );
     }
 
-    // หากไม่มีรีวิวในช่วงเวลานี้
+    // หากไม่มีรีวิวในเดือนนี้
     if (reviewCountMap.size === 0) {
       return res.status(200).json({
         success: true,
-        period,
+        period: "monthly",
         periodStart,
         periodEnd,
         totalBooks: 0,
@@ -122,7 +112,11 @@ router.get("/viral-books", async (req, res) => {
       });
     }
 
-    // 5. ดึงข้อมูลหนังสือจากตาราง Books
+    // ======================================================
+    // 4. ดึงข้อมูลหนังสือจากตาราง Books
+    // แบ่งโหลดเป็นชุดละ 500 เล่ม
+    // ======================================================
+
     const bookIds = [...reviewCountMap.keys()];
 
     const books = [];
@@ -155,14 +149,20 @@ router.get("/viral-books", async (req, res) => {
       books.push(...(data || []));
     }
 
-    // 6. เพิ่มจำนวนรีวิวให้หนังสือ
+    // ======================================================
+    // 5. เพิ่มจำนวนรีวิวให้หนังสือ
+    // ======================================================
+
     const viralBooks = books.map((book) => ({
       ...book,
       Review_Count:
         reviewCountMap.get(String(book.BooksID)) || 0,
     }));
 
-    // 7. เรียงจากจำนวนรีวิวมากไปน้อย
+    // ======================================================
+    // 6. เรียงจากจำนวนรีวิวมากไปน้อย
+    // ======================================================
+
     viralBooks.sort((a, b) => {
       if (b.Review_Count !== a.Review_Count) {
         return b.Review_Count - a.Review_Count;
@@ -174,10 +174,14 @@ router.get("/viral-books", async (req, res) => {
       );
     });
 
-    // 8. ส่งข้อมูลกลับ Frontend
+    // ======================================================
+    // 7. ส่งข้อมูลกลับ Frontend
+    // แสดงหนังสือ 100 อันดับแรก
+    // ======================================================
+
     return res.status(200).json({
       success: true,
-      period,
+      period: "monthly",
       periodStart,
       periodEnd,
       totalBooks: viralBooks.length,

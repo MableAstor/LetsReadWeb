@@ -3,6 +3,7 @@ import ReviewInput from "../components/ReviewInput";
 import WriteReviewModal from "../components/WriteReviewModal";
 import ReviewCard from "../components/ReviewCard";
 import { supabase } from "../lib/supabase";
+import UserAvatar from "../components/UserAvatar";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"

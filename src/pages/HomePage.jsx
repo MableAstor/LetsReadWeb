@@ -4,57 +4,40 @@ import { Link } from "react-router-dom";
 
 import { BookCard } from "../components/BookCard";
 
+import UserAvatar from "../components/UserAvatar";
+
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
 
 // ======================================================
-// ตรวจสอบรอบ Viral ตามเวลาไทย
+// ตรวจสอบเดือนปัจจุบันตามเวลาไทย
+// ใช้ตรวจจับเมื่อเปลี่ยนเดือนเพื่อโหลด Viral Books ใหม่
 // ======================================================
-function getBangkokPeriodKey(period) {
+
+function getBangkokMonthKey() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
-    day: "2-digit",
   }).formatToParts(new Date());
 
-  const year = Number(
-    parts.find((part) => part.type === "year")?.value
-  );
+  const year = parts.find(
+    (part) => part.type === "year"
+  )?.value;
 
-  const month = Number(
-    parts.find((part) => part.type === "month")?.value
-  );
+  const month = parts.find(
+    (part) => part.type === "month"
+  )?.value;
 
-  const day = Number(
-    parts.find((part) => part.type === "day")?.value
-  );
-
-  if (period === "weekly") {
-    const date = new Date(
-      Date.UTC(year, month - 1, day)
-    );
-
-    const dayOfWeek = date.getUTCDay();
-    const daysSinceMonday = (dayOfWeek + 6) % 7;
-
-    date.setUTCDate(
-      date.getUTCDate() - daysSinceMonday
-    );
-
-    return date.toISOString().slice(0, 10);
-  }
-
-  return `${year}-${String(month).padStart(2, "0")}`;
+  return `${year}-${month}`;
 }
 
 // ======================================================
 // HOME PAGE
 // ======================================================
-export default function HomePage() {
-  const [viralPeriod, setViralPeriod] = useState("weekly");
 
+export default function HomePage() {
   const [viralBooks, setViralBooks] = useState([]);
 
   const [viralLoading, setViralLoading] = useState(true);
@@ -66,6 +49,7 @@ export default function HomePage() {
   // ======================================================
   // ปรับจำนวนหนังสือตามขนาดหน้าจอ
   // ======================================================
+
   useEffect(() => {
     const updateLimit = () => {
       if (window.innerWidth >= 1536) {
@@ -87,8 +71,10 @@ export default function HomePage() {
   }, []);
 
   // ======================================================
-  // โหลด Viral Books จาก Backend
+  // โหลด Viral Books รายเดือนจาก Backend
+  // GET /api/auth/viral-books
   // ======================================================
+
   useEffect(() => {
     let cancelled = false;
 
@@ -98,7 +84,7 @@ export default function HomePage() {
 
       try {
         const response = await fetch(
-          `${API_URL}/viral-books?period=${viralPeriod}`
+          `${API_URL}/viral-books`
         );
 
         const result = await response.json().catch(() => ({}));
@@ -131,6 +117,7 @@ export default function HomePage() {
 
         if (!cancelled) {
           setViralBooks([]);
+
           setViralError(
             error.message || "ไม่สามารถโหลดหนังสือ Viral ได้"
           );
@@ -147,24 +134,26 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [viralPeriod, reloadKey]);
+  }, [reloadKey]);
 
   // ======================================================
-  // ตรวจจับการเปลี่ยนสัปดาห์หรือเดือน
+  // ตรวจจับการเปลี่ยนเดือนตามเวลาไทย
+  // หากขึ้นเดือนใหม่ ให้โหลด Viral Books ใหม่อัตโนมัติ
   // ======================================================
+
   useEffect(() => {
-    let lastPeriodKey = getBangkokPeriodKey(viralPeriod);
+    let lastMonthKey = getBangkokMonthKey();
 
     const timerId = window.setInterval(() => {
-      const nextPeriodKey = getBangkokPeriodKey(viralPeriod);
+      const nextMonthKey = getBangkokMonthKey();
 
-      if (nextPeriodKey !== lastPeriodKey) {
-        lastPeriodKey = nextPeriodKey;
+      if (nextMonthKey !== lastMonthKey) {
+        lastMonthKey = nextMonthKey;
 
         setReloadKey((key) => key + 1);
 
         console.log(
-          `[Home] New ${viralPeriod} period detected. Reloading Viral Books...`
+          "[Home] New month detected. Reloading Viral Books..."
         );
       }
     }, 30_000);
@@ -172,7 +161,7 @@ export default function HomePage() {
     return () => {
       window.clearInterval(timerId);
     };
-  }, [viralPeriod]);
+  }, []);
 
   return (
     <div className="mx-auto box-border w-full min-w-0 max-w-6xl px-3 py-6 pb-28 font-sans">
@@ -185,43 +174,11 @@ export default function HomePage() {
               <span>🔥</span>
             </h2>
 
-            <div className="flex items-center gap-2">
-              {/* เลือกช่วงเวลา */}
-              <div className="flex rounded-lg bg-[#FAEFEB] p-1">
-                <button
-                  type="button"
-                  onClick={() => setViralPeriod("weekly")}
-                  aria-pressed={viralPeriod === "weekly"}
-                  className={`
-                    rounded-md px-3 py-1.5 text-xs font-semibold
-                    transition-colors
-                    ${
-                      viralPeriod === "weekly"
-                        ? "bg-white text-[#A36D70] shadow-sm"
-                        : "text-gray-500"
-                    }
-                  `}
-                >
-                  Weekly
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setViralPeriod("monthly")}
-                  aria-pressed={viralPeriod === "monthly"}
-                  className={`
-                    rounded-md px-3 py-1.5 text-xs font-semibold
-                    transition-colors
-                    ${
-                      viralPeriod === "monthly"
-                        ? "bg-white text-[#A36D70] shadow-sm"
-                        : "text-gray-500"
-                    }
-                  `}
-                >
-                  Monthly
-                </button>
-              </div>
+            <div className="flex items-center gap-3">
+              {/* แสดงช่วงเวลารายเดือน */}
+              <span className="rounded-lg bg-[#FAEFEB] px-3 py-1.5 text-xs font-semibold text-[#A36D70]">
+                Monthly
+              </span>
 
               <Link
                 to="/viral-books"
@@ -232,7 +189,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Loading */}
+          {/* Loading / Error / Empty / Books */}
           {viralLoading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               กำลังโหลดหนังสือ...
@@ -243,7 +200,7 @@ export default function HomePage() {
             </div>
           ) : viralBooks.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              ยังไม่มีรีวิวหนังสือในช่วงเวลานี้
+              ยังไม่มีรีวิวหนังสือในเดือนนี้
             </div>
           ) : (
             <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 2xl:grid-cols-7">

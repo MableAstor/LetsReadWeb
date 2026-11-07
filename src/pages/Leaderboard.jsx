@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+
 import { ArrowUp, Crown, Trophy } from "lucide-react";
+
 import { supabase } from "../lib/supabase";
+
 import {
   Card,
   CardContent,
@@ -10,12 +13,6 @@ import {
 
 import { Badge } from "../components/ui/badge";
 
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "../components/ui/tabs";
-
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
@@ -23,80 +20,38 @@ const API_URL = (
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 // ======================================================
-// ตรวจสอบรอบ Leaderboard ตามเวลาไทย
-//
-// Weekly:
-// เปลี่ยนเมื่อขึ้นวันจันทร์
-//
-// Monthly:
-// เปลี่ยนเมื่อขึ้นเดือนใหม่
+// ตรวจสอบเดือนปัจจุบันตามเวลาไทย
+// ใช้ตรวจจับเมื่อเปลี่ยนเดือนเพื่อโหลด Leaderboard ใหม่
 // ======================================================
-function getBangkokPeriodKey(period) {
+
+function getBangkokMonthKey() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
-    day: "2-digit",
   }).formatToParts(new Date());
 
-  const year = Number(
-    parts.find((part) => part.type === "year")?.value
-  );
+  const year = parts.find(
+    (part) => part.type === "year"
+  )?.value;
 
-  const month = Number(
-    parts.find((part) => part.type === "month")?.value
-  );
+  const month = parts.find(
+    (part) => part.type === "month"
+  )?.value;
 
-  const day = Number(
-    parts.find((part) => part.type === "day")?.value
-  );
-
-  // Weekly: ใช้วันที่วันจันทร์ของสัปดาห์ปัจจุบันเป็น Key
-  if (period === "weekly") {
-    const bangkokDate = new Date(
-      Date.UTC(year, month - 1, day)
-    );
-
-    const dayOfWeek = bangkokDate.getUTCDay();
-
-    // Sunday = 0, Monday = 1, ..., Saturday = 6
-    const daysSinceMonday = (dayOfWeek + 6) % 7;
-
-    bangkokDate.setUTCDate(
-      bangkokDate.getUTCDate() - daysSinceMonday
-    );
-
-    const mondayYear = bangkokDate.getUTCFullYear();
-    const mondayMonth = String(
-      bangkokDate.getUTCMonth() + 1
-    ).padStart(2, "0");
-    const mondayDay = String(
-      bangkokDate.getUTCDate()
-    ).padStart(2, "0");
-
-    return `${mondayYear}-${mondayMonth}-${mondayDay}`;
-  }
-
-  // Monthly: ใช้ปีและเดือนปัจจุบันเป็น Key
-  return `${year}-${String(month).padStart(2, "0")}`;
+  return `${year}-${month}`;
 }
 
 export default function LeaderboardPage() {
-  const [period, setPeriod] = useState("weekly");
-
-  const isWeekly = period === "weekly";
-
   // ข้อมูล Leaderboard จาก Backend
   const [leaderboardData, setLeaderboardData] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Countdown แยกตาม Weekly และ Monthly
-  const [countdowns, setCountdowns] = useState({
-    weekly: "",
-    monthly: "",
-  });
+  // Countdown ถึงสิ้นเดือน
+  const [countdown, setCountdown] = useState("");
 
   const rankList = leaderboardData?.rankings || [];
   const currentUser = leaderboardData?.currentUser || null;
@@ -107,7 +62,9 @@ export default function LeaderboardPage() {
 
   // ======================================================
   // โหลด Leaderboard จาก Backend
+  // GET /api/auth/leaderboard
   // ======================================================
+
   useEffect(() => {
     let cancelled = false;
 
@@ -133,9 +90,9 @@ export default function LeaderboardPage() {
           );
         }
 
-        // เรียก API ตามช่วงเวลาที่เลือก
+        // เรียก API Leaderboard รายเดือน
         const response = await fetch(
-          `${API_URL}/leaderboard?period=${period}`,
+          `${API_URL}/leaderboard`,
           {
             headers: {
               Authorization: `Bearer ${session.access_token}`,
@@ -178,25 +135,26 @@ export default function LeaderboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [period, reloadKey]);
+  }, [reloadKey]);
 
   // ======================================================
-  // ตรวจจับการเปลี่ยนสัปดาห์หรือเดือน
-  // หากรอบเปลี่ยน ให้โหลด Leaderboard ใหม่อัตโนมัติ
+  // ตรวจจับการเปลี่ยนเดือน
+  // หากขึ้นเดือนใหม่ ให้โหลด Leaderboard ใหม่อัตโนมัติ
   // ======================================================
+
   useEffect(() => {
-    let lastPeriodKey = getBangkokPeriodKey(period);
+    let lastMonthKey = getBangkokMonthKey();
 
     const timerId = window.setInterval(() => {
-      const nextPeriodKey = getBangkokPeriodKey(period);
+      const nextMonthKey = getBangkokMonthKey();
 
-      if (nextPeriodKey !== lastPeriodKey) {
-        lastPeriodKey = nextPeriodKey;
+      if (nextMonthKey !== lastMonthKey) {
+        lastMonthKey = nextMonthKey;
 
         setReloadKey((key) => key + 1);
 
         console.log(
-          `[Leaderboard] New ${period} period detected. Reloading rankings...`
+          "[Leaderboard] New month detected. Reloading rankings..."
         );
       }
     }, 30_000);
@@ -204,11 +162,12 @@ export default function LeaderboardPage() {
     return () => {
       window.clearInterval(timerId);
     };
-  }, [period]);
+  }, []);
 
   // ======================================================
-  // Countdown ถึงสิ้นสุดสัปดาห์และสิ้นเดือนตามเวลาไทย
+  // Countdown ถึงสิ้นเดือนตามเวลาไทย
   // ======================================================
+
   useEffect(() => {
     function formatRemainingTime(endDate) {
       const remaining = Math.max(
@@ -233,12 +192,11 @@ export default function LeaderboardPage() {
       return `เหลืออีก ${days} วัน ${hours} ชั่วโมง ${minutes} นาที`;
     }
 
-    function updateCountdowns() {
+    function updateCountdown() {
       const parts = new Intl.DateTimeFormat("en-US", {
         timeZone: "Asia/Bangkok",
         year: "numeric",
         month: "numeric",
-        day: "numeric",
       }).formatToParts(new Date());
 
       const year = Number(
@@ -249,55 +207,32 @@ export default function LeaderboardPage() {
         parts.find((part) => part.type === "month")?.value
       );
 
-      const day = Number(
-        parts.find((part) => part.type === "day")?.value
-      );
-
-      // วันที่ปัจจุบันตามปฏิทินเวลาไทย
-      const bangkokDate = new Date(
-        Date.UTC(year, month - 1, day)
-      );
-
-      // หาวันจันทร์ของสัปดาห์ปัจจุบัน
-      const dayOfWeek = bangkokDate.getUTCDay();
-      const daysSinceMonday = (dayOfWeek + 6) % 7;
-
-      // เวลาเริ่มต้นของวันจันทร์สัปดาห์ถัดไป
-      const nextMondayTime =
-        Date.UTC(
-          year,
-          month - 1,
-          day - daysSinceMonday + 7
-        ) - BANGKOK_OFFSET_MS;
-
-      const endOfWeek = new Date(nextMondayTime);
-
-      // เวลาเริ่มต้นของเดือนถัดไป
+      // เวลาเริ่มต้นวันที่ 1 ของเดือนถัดไป เวลาไทย
       const nextMonthTime =
         Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
 
       const endOfMonth = new Date(nextMonthTime);
 
-      setCountdowns({
-        weekly: formatRemainingTime(endOfWeek),
-        monthly: formatRemainingTime(endOfMonth),
-      });
+      setCountdown(formatRemainingTime(endOfMonth));
     }
 
-    updateCountdowns();
+    updateCountdown();
 
     const timer = window.setInterval(
-      updateCountdowns,
+      updateCountdown,
       60_000
     );
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+    };
   }, []);
 
   // ======================================================
   // ของรางวัล TOP 1–3
   // คงการออกแบบเดิมไว้
   // ======================================================
+
   const rewardBadges = [
     {
       rank: 1,
@@ -352,75 +287,33 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {/* 1. Weekly / Monthly Tabs */}
+      {/* ======================================================
+          1. Monthly Countdown
+         ====================================================== */}
+
       <div className="w-full shrink-0">
-        <Tabs
-          value={period}
-          onValueChange={setPeriod}
-          className="w-full"
+        <div
+          className="
+            flex min-h-[68px] w-full
+            flex-col items-center justify-center
+            gap-1 rounded-xl border border-purple-300
+            bg-white px-3 py-3 text-center shadow-sm
+          "
         >
-          <TabsList
-            className="
-              grid !h-auto w-full
-              grid-cols-2 gap-2
-              bg-transparent p-0
-              shadow-none
-            "
-          >
-            <TabsTrigger
-              value="weekly"
-              className="
-                !h-auto min-h-[68px] min-w-0
-                flex flex-col items-center justify-center
-                gap-1 rounded-xl border
-                border-transparent
-                bg-white px-2 py-3
-                text-center whitespace-normal
-                shadow-sm
-                data-[state=active]:border-orange-300
-                data-[state=active]:bg-white
-                data-[state=active]:shadow-sm
-                sm:px-3
-              "
-            >
-              <span className="text-xs font-bold text-gray-900 sm:text-sm">
-                Weekly
-              </span>
+          <span className="text-sm font-bold text-gray-900">
+            Monthly
+          </span>
 
-              <span className="text-center text-[10px] leading-snug text-gray-500">
-                {countdowns.weekly}
-              </span>
-            </TabsTrigger>
-
-            <TabsTrigger
-              value="monthly"
-              className="
-                !h-auto min-h-[68px] min-w-0
-                flex flex-col items-center justify-center
-                gap-1 rounded-xl border
-                border-transparent
-                bg-white px-2 py-3
-                text-center whitespace-normal
-                shadow-sm
-                data-[state=active]:border-purple-300
-                data-[state=active]:bg-white
-                data-[state=active]:shadow-sm
-                sm:px-3
-              "
-            >
-              <span className="text-xs font-bold text-gray-900 sm:text-sm">
-                Monthly
-              </span>
-
-              <span className="text-center text-[10px] leading-snug text-gray-500">
-                {countdowns.monthly}
-              </span>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+          <span className="text-[10px] leading-snug text-gray-500">
+            {countdown}
+          </span>
+        </div>
       </div>
 
-      {/* 2. Top 1–3 Rewards */}
+      {/* ======================================================
+          2. Top 1–3 Rewards
+         ====================================================== */}
+
       <Card
         className="
           w-full min-w-0 gap-4
@@ -440,9 +333,7 @@ export default function LeaderboardPage() {
             ของรางวัลสำหรับ TOP 1-3
 
             <span className="block">
-              {isWeekly
-                ? "ประจำสัปดาห์นี้"
-                : "ประจำเดือนนี้"}
+              ประจำเดือนนี้
             </span>
           </CardTitle>
         </CardHeader>
@@ -458,34 +349,23 @@ export default function LeaderboardPage() {
             {/* Limited Frame */}
             <div className="flex min-w-0 flex-col items-center text-center">
               <div
-                className={`
+                className="
                   flex h-24 w-24
                   items-center justify-center
                   rounded-full border-4
+                  border-indigo-300
                   bg-muted/40 shadow-md
                   sm:h-28 sm:w-28
-                  ${
-                    isWeekly
-                      ? "border-orange-400"
-                      : "border-indigo-300"
-                  }
-                `}
+                "
               >
-                {isWeekly ? (
-                  <span className="text-4xl">🔥</span>
-                ) : (
-                  <Crown className="h-12 w-12 text-amber-500" />
-                )}
+                <Crown className="h-12 w-12 text-amber-500" />
               </div>
 
               <p className="mt-3 text-xs font-bold leading-relaxed">
-                เฟรมลิมิเต็ด
-                {isWeekly ? "ประจำสัปดาห์" : "ประจำเดือน"}
+                เฟรมลิมิเต็ดประจำเดือน
 
                 <span className="block">
-                  เฉพาะ
-                  {isWeekly ? "สัปดาห์นี้" : "เดือนนี้"}
-                  เท่านั้น!!
+                  เฉพาะเดือนนี้เท่านั้น!!
                 </span>
               </p>
 
@@ -522,10 +402,7 @@ export default function LeaderboardPage() {
                   </span>
 
                   <span className="min-w-0 leading-snug">
-                    นักรีวิว TOP {item.rank}
-                    {isWeekly
-                      ? " ประจำสัปดาห์"
-                      : " ประจำเดือน"}
+                    นักรีวิว TOP {item.rank} ประจำเดือน
                   </span>
                 </Badge>
               ))}
@@ -534,7 +411,10 @@ export default function LeaderboardPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Leaderboard Rankings */}
+      {/* ======================================================
+          3. Leaderboard Rankings
+         ====================================================== */}
+
       <Card
         className="
           w-full min-w-0 gap-3
@@ -631,9 +511,12 @@ export default function LeaderboardPage() {
         </CardContent>
       </Card>
 
-      {/* 4. Floating Current User Ranking */}
-      {/* Mobile: above Bottom Navigation */}
-      {/* Desktop: bottom of viewport */}
+      {/* ======================================================
+          4. Floating Current User Ranking
+          Mobile: above Bottom Navigation
+          Desktop: bottom of viewport
+         ====================================================== */}
+
       {!loading && !errorMessage && currentUser && (
         <Card
           className="
@@ -703,6 +586,7 @@ export default function LeaderboardPage() {
                 {currentUser.rank !== 1 && (
                   <>
                     <ArrowUp className="h-3 w-3" />
+
                     <span>
                       เพื่อขึ้นอันดับ {previousRank?.rank ?? 1}
                     </span>

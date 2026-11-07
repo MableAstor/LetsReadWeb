@@ -1,11 +1,8 @@
-
 import { useState } from "react";
 import {
   Bookmark,
   Eye,
   MoreHorizontal,
-  ShoppingBag,
-  BookCheck,
   Trash2,
 } from "lucide-react";
 
@@ -18,15 +15,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 
 export default function Savebookfrom({
   book,
   review,
-  onMoveToWantToBuy,
-  onMarkAsRead,
   onRemove,
 }) {
   const [showReview, setShowReview] = useState(false);
@@ -107,24 +101,7 @@ export default function Savebookfrom({
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" sideOffset={6}>
-              <DropdownMenuItem
-                disabled={!onMoveToWantToBuy}
-                onSelect={() => onMoveToWantToBuy?.(book)}
-              >
-                <ShoppingBag className="h-4 w-4" />
-                Want to Buy
-              </DropdownMenuItem>
-
-              <DropdownMenuItem
-                disabled={!onMarkAsRead}
-                onSelect={() => onMarkAsRead?.(book)}
-              >
-                <BookCheck className="h-4 w-4" />
-                Mark as Read
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-
+              {/* Remove from Saved */}
               <DropdownMenuItem
                 variant="destructive"
                 disabled={!onRemove}

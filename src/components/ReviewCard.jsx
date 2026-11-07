@@ -7,15 +7,41 @@ import {
   CardFooter,
   CardHeader,
 } from "./ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import profileicon from "../assets/profile-icon.png";
 import { supabase } from "../lib/supabase";
 
+import UserAvatar from "./UserAvatar";
+
+import firstLogin from "../assets/pink-cloud-circle-frame-2026.png";
+import reviewFive from "../assets/red-fire-abstract-frame.png";
+import toponeNOV from "../assets/blue-and-orange-fish-frame.png";
+import toptwoNOV from "../assets/cute-bunnies-hug-frame.png";
+import topthreeNOV from "../assets/running-dogs-and-paws-frame.png";
+import toponeDEC from "../assets/red-cat-yarn-frame.png.png";
+import toptwoDEC from "../assets/green-leaves-and-blue-clouds-frame.png";
+import topthreeDEC from "../assets/golden-thorn-vines-frame.png";
+
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
+
+// ======================================================
+// รูปกรอบโปรไฟล์
+// ใช้ ID เดียวกับ ProfilePage
+// ======================================================
+
+const FRAME_IMAGES = {
+  1: firstLogin,
+  2: reviewFive,
+  3: toponeNOV,
+  4: toptwoNOV,
+  5: topthreeNOV,
+  6: toponeDEC,
+  7: toptwoDEC,
+  8: topthreeDEC,
+};
 
 export default function ReviewCard({ review }) {
   // สถานะหัวใจและจำนวนหัวใจ
@@ -61,6 +87,30 @@ export default function ReviewCard({ review }) {
   const userName = review.User_Name || "Reader";
   const bookTitle = review.Book_Title || "Untitled book";
 
+  // ======================================================
+  // รูปโปรไฟล์และกรอบของเจ้าของรีวิว
+  // ======================================================
+
+  // ใช้รูปที่ผู้ใช้อัปโหลด หากไม่มีใช้รูปเริ่มต้น
+  const avatarUrl =
+    review.User_Avatar_URL ||
+    review.User?.User_Avatar_URL ||
+    profileicon;
+
+  // ดึง ID กรอบที่ผู้ใช้เลือกจากฐานข้อมูล
+  const activeFrameId = Number(
+    review.Active_Frame_RewardsID ??
+      review.User?.Active_Frame_RewardsID
+  );
+
+  // ค้นหารูปกรอบจาก ID
+  const activeFrameImage =
+    FRAME_IMAGES[activeFrameId] || null;
+
+  // ======================================================
+  // ข้อมูลรีวิว
+  // ======================================================
+
   // เลือกรูปที่จะแสดง: รูปที่ผู้ใช้อัปโหลดก่อน
   // หากไม่มี ให้ใช้รูปปกหนังสือจากฐานข้อมูล
   const reviewImage = review.Image_URL || review.Books_Cover;
@@ -72,6 +122,7 @@ export default function ReviewCard({ review }) {
   // ======================================================
   // LIKE / UNLIKE REVIEW
   // ======================================================
+
   const handleLike = async () => {
     if (liking || !review.ReviewsID) return;
 
@@ -126,6 +177,7 @@ export default function ReviewCard({ review }) {
   // ======================================================
   // SAVE / UNSAVE REVIEW
   // ======================================================
+
   const handleSave = async () => {
     if (saving || !review.ReviewsID) return;
 
@@ -164,7 +216,53 @@ export default function ReviewCard({ review }) {
         );
       }
 
+      // อัปเดตสถานะ Save / Unsave
       setSaved(Boolean(result.saved));
+
+      // ======================================================
+      // ตรวจสอบรางวัลเฉพาะเมื่อบันทึกรีวิวสำเร็จ
+      // ======================================================
+
+      if (result.saved) {
+        try {
+          const rewardResponse = await fetch(
+            `${API_URL}/rewards/check`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            }
+          );
+
+          const rewardResult = await rewardResponse
+            .json()
+            .catch(() => ({}));
+
+          if (
+            !rewardResponse.ok ||
+            rewardResult.success === false
+          ) {
+            console.error(
+              "[REWARDS] ตรวจสอบรางวัลไม่สำเร็จ:",
+              rewardResult.message
+            );
+          } else if (
+            rewardResult.newlyUnlocked?.length > 0
+          ) {
+            console.log(
+              "[REWARDS] ปลดล็อกรางวัลใหม่:",
+              rewardResult.newlyUnlocked
+            );
+          }
+        } catch (rewardError) {
+          // ระบบรางวัลผิดพลาดต้องไม่กระทบการบันทึกรีวิว
+          console.error(
+            "[REWARDS] Error:",
+            rewardError
+          );
+        }
+      }
     } catch (error) {
       console.error("[ReviewCard] Save error:", error);
 
@@ -179,6 +277,7 @@ export default function ReviewCard({ review }) {
   // ======================================================
   // เตรียมข้อมูลสำหรับแชร์
   // ======================================================
+
   const getShareData = () => {
     const shareUrl = new URL(window.location.href);
 
@@ -203,6 +302,7 @@ export default function ReviewCard({ review }) {
   // ======================================================
   // SHARE REVIEW TO SOCIAL MEDIA
   // ======================================================
+
   const handleShare = (platform) => {
     const { url, text } = getShareData();
 
@@ -234,6 +334,7 @@ export default function ReviewCard({ review }) {
   // ======================================================
   // COPY REVIEW LINK
   // ======================================================
+
   const handleCopyLink = async () => {
     const { url } = getShareData();
 
@@ -262,13 +363,15 @@ export default function ReviewCard({ review }) {
     >
       {/* Reviewer profile */}
       <CardHeader className="flex flex-row items-center gap-3 px-3 py-3 sm:px-4">
-        <Avatar className="h-10 w-10 shrink-0">
-          <AvatarImage src={profileicon} alt={userName} />
 
-          <AvatarFallback className="bg-pink-100 text-pink-600">
-            {userName.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        {/* รูปโปรไฟล์พร้อมกรอบของเจ้าของรีวิว */}
+        <UserAvatar
+          avatarUrl={avatarUrl}
+          userName={userName}
+          frameImage={activeFrameImage}
+          size={40}
+          frameScale={1.3}
+        />
 
         <span className="min-w-0 flex-1 truncate text-sm font-semibold sm:text-base">
           {userName}

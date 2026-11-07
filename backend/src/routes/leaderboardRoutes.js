@@ -8,18 +8,13 @@ const PAGE_SIZE = 1000;
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 // ======================================================
-// คำนวณช่วงเวลาของ Leaderboard ตามเวลาไทย
+// คำนวณเวลาเริ่มต้น Leaderboard รายเดือนตามเวลาไทย
 //
-// Weekly:
-// เริ่มวันจันทร์ เวลา 00:00 น. ของสัปดาห์ปัจจุบัน
-//
-// Monthly:
-// เริ่มวันที่ 1 เวลา 00:00 น. ของเดือนปัจจุบัน
-//
-// เมื่อขึ้นสัปดาห์หรือเดือนใหม่ ระบบจะเปลี่ยนช่วงเวลา
-// ที่ใช้คำนวณคะแนนให้อัตโนมัติ
+// เริ่มวันที่ 1 ของเดือน เวลา 00:00 น.
+// เมื่อขึ้นเดือนใหม่ ระบบจะเปลี่ยนช่วงเวลาคำนวณอัตโนมัติ
 // ======================================================
-function getPeriodStart(period, now) {
+
+function getMonthStart(now) {
   // แปลงเวลาปัจจุบันเป็นเวลาไทย
   const bangkokNow = new Date(
     now.getTime() + BANGKOK_OFFSET_MS
@@ -27,57 +22,29 @@ function getPeriodStart(period, now) {
 
   const year = bangkokNow.getUTCFullYear();
   const month = bangkokNow.getUTCMonth();
-  const date = bangkokNow.getUTCDate();
 
-  let startTime;
-
-  if (period === "weekly") {
-    // หาวันจันทร์ของสัปดาห์ปัจจุบัน
-    const dayOfWeek = bangkokNow.getUTCDay();
-
-    // Sunday = 0, Monday = 1, ..., Saturday = 6
-    const daysSinceMonday = (dayOfWeek + 6) % 7;
-
-    // คำนวณเวลาเริ่มต้นวันจันทร์ 00:00 น. เวลาไทย
-    startTime =
-      Date.UTC(
-        year,
-        month,
-        date - daysSinceMonday
-      ) - BANGKOK_OFFSET_MS;
-  } else {
-    // คำนวณเวลาเริ่มต้นวันที่ 1 ของเดือน เวลาไทย
-    startTime =
-      Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
-  }
+  // คำนวณเวลาเริ่มต้นวันที่ 1 เวลา 00:00 น. ของไทย
+  const startTime =
+    Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
 
   return new Date(startTime).toISOString();
 }
 
 // ======================================================
 // GET LEADERBOARD
+// GET /api/auth/leaderboard
 //
-// GET /api/auth/leaderboard?period=weekly
-// GET /api/auth/leaderboard?period=monthly
-//
-// นับเฉพาะรีวิวที่สร้างในช่วงเวลาที่เลือก
+// นับเฉพาะรีวิวที่สร้างภายในเดือนปัจจุบัน
+// เริ่มวันที่ 1 เวลา 00:00 น. ตามเวลาไทย
 // ไม่ลบรีวิวเก่าจากฐานข้อมูล
 // ======================================================
+
 router.get("/leaderboard", async (req, res) => {
   try {
-    const { period } = req.query;
-
-    // ตรวจสอบประเภทของอันดับ
-    if (!["weekly", "monthly"].includes(period)) {
-      return res.status(400).json({
-        success: false,
-        message: "period ต้องเป็น weekly หรือ monthly",
-      });
-    }
-
     // --------------------------------------------------
     // 1. ตรวจสอบผู้ใช้ที่เข้าสู่ระบบ
     // --------------------------------------------------
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
@@ -104,16 +71,18 @@ router.get("/leaderboard", async (req, res) => {
     );
 
     // --------------------------------------------------
-    // 2. กำหนดช่วงเวลาของอันดับ
+    // 2. กำหนดช่วงเวลาของอันดับรายเดือน
     // --------------------------------------------------
+
     const now = new Date();
 
-    const periodStart = getPeriodStart(period, now);
+    const periodStart = getMonthStart(now);
     const periodEnd = now.toISOString();
 
     // --------------------------------------------------
     // 3. โหลดรายชื่อผู้ใช้
     // --------------------------------------------------
+
     const { data: users, error: usersError } =
       await supabaseAdmin
         .from("User")
@@ -125,16 +94,12 @@ router.get("/leaderboard", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 4. โหลดรีวิวเฉพาะในช่วงเวลาที่เลือก
+    // 4. โหลดรีวิวเฉพาะในเดือนปัจจุบัน
     //
-    // Weekly:
-    // ตั้งแต่วันจันทร์ 00:00 น. จนถึงปัจจุบัน
-    //
-    // Monthly:
-    // ตั้งแต่วันที่ 1 เวลา 00:00 น. จนถึงปัจจุบัน
-    //
+    // เริ่มวันที่ 1 เวลา 00:00 น. จนถึงปัจจุบัน
     // โหลดเป็นชุดละ 1,000 รายการ
     // --------------------------------------------------
+
     const reviewRows = [];
     let offset = 0;
 
@@ -166,8 +131,9 @@ router.get("/leaderboard", async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 5. นับจำนวนรีวิวของผู้ใช้แต่ละคนในรอบนี้
+    // 5. นับจำนวนรีวิวของผู้ใช้แต่ละคนในเดือนนี้
     // --------------------------------------------------
+
     const reviewCountMap = new Map();
 
     for (const review of reviewRows) {
@@ -182,9 +148,10 @@ router.get("/leaderboard", async (req, res) => {
     // --------------------------------------------------
     // 6. สร้างคะแนนและจัดอันดับ
     //
-    // คะแนนมาจากรีวิวในช่วงเวลาที่กำหนดเท่านั้น
-    // ผู้ใช้ที่ไม่มีรีวิวในรอบนี้จะมีคะแนน 0
+    // คะแนนมาจากรีวิวในเดือนปัจจุบันเท่านั้น
+    // ผู้ใช้ที่ไม่มีรีวิวในเดือนนี้จะมีคะแนน 0
     // --------------------------------------------------
+
     const rankedUsers = (users || [])
       .map((user) => ({
         UserID: user.UserID,
@@ -225,6 +192,7 @@ router.get("/leaderboard", async (req, res) => {
     // --------------------------------------------------
     // 7. ค้นหาอันดับของผู้ใช้ปัจจุบัน
     // --------------------------------------------------
+
     const currentUser = rankedUsers.find(
       (user) => user.isCurrentUser
     );
@@ -239,6 +207,7 @@ router.get("/leaderboard", async (req, res) => {
     // 8. หาอันดับก่อนหน้า
     // คำนวณจำนวนรีวิวที่ต้องเพิ่มเพื่อแซงอันดับนั้น
     // --------------------------------------------------
+
     const previousRank =
       rankedUsers.find(
         (user) => user.rank === currentUser.rank - 1
@@ -255,6 +224,7 @@ router.get("/leaderboard", async (req, res) => {
     // 9. เตรียมรายการ TOP 5
     // หากผู้ใช้ปัจจุบันอยู่นอก TOP 5 ให้แสดงเพิ่ม
     // --------------------------------------------------
+
     const rankings = rankedUsers.slice(0, 5);
 
     if (currentUser.rank > 5) {
@@ -264,9 +234,10 @@ router.get("/leaderboard", async (req, res) => {
     // --------------------------------------------------
     // 10. ส่งข้อมูลกลับให้หน้า Leaderboard
     // --------------------------------------------------
+
     return res.status(200).json({
       success: true,
-      period,
+      period: "monthly",
       periodStart,
       periodEnd,
       rankings,

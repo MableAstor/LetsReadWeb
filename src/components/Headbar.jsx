@@ -1,4 +1,4 @@
-
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   BookOpen,
@@ -10,10 +10,74 @@ import {
   Trophy,
   UserRound,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+import UserAvatar from "@/components/UserAvatar";
+import { supabase } from "@/lib/supabase";
 
 export const Headbar = () => {
   const location = useLocation();
+
+  // ======================================================
+  // ข้อมูลรูปโปรไฟล์
+  // ======================================================
+
+  const [profile, setProfile] = useState(null);
+  const [userName, setUserName] = useState("J");
+
+  // ======================================================
+  // โหลดรูปโปรไฟล์จากตาราง User
+  // ======================================================
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfile = async () => {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError) throw authError;
+
+        if (!user) {
+          if (active) {
+            setProfile(null);
+            setUserName("J");
+          }
+          return;
+        }
+
+        const fallbackName =
+          user.user_metadata?.username ||
+          user.user_metadata?.full_name ||
+          user.email?.split("@")[0] ||
+          "J";
+
+        const { data, error } = await supabase
+          .from("User")
+          .select("User_Name, User_Avatar_URL")
+          .eq("auth_user_id", user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (active) {
+          setProfile(data || null);
+          setUserName(data?.User_Name || fallbackName);
+        }
+      } catch (error) {
+        console.error("[Headbar] Load profile error:", error);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [location.pathname]);
 
   const navigation = [
     { label: "Home", icon: Compass, path: "/home" },
@@ -82,10 +146,13 @@ export const Headbar = () => {
             <Bell className="size-5" />
           </Button>
 
+          {/* รูปโปรไฟล์ ไม่มีกรอบ */}
           <Link to="/profile">
-            <div className="flex size-10 items-center justify-center rounded-full bg-pink-100 text-pink-600 font-semibold text-[#765B83]">
-              J
-            </div>
+            <UserAvatar
+              avatarUrl={profile?.User_Avatar_URL}
+              userName={profile?.User_Name || userName}
+              size={40}
+            />
           </Link>
         </div>
       </div>

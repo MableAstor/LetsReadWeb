@@ -558,7 +558,41 @@ export default function WriteReviewModal({
       }
 
       // ======================================================
-      // 7. รีเฟรชข้อมูล Feed
+      // 7. ตรวจสอบและปลดล็อกรางวัลหลังบันทึกรีวิวสำเร็จ
+      // ======================================================
+      try {
+        const rewardResponse = await fetch(
+          `${API_URL}/rewards/check`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        const rewardResult = await rewardResponse
+          .json()
+          .catch(() => ({}));
+
+        if (!rewardResponse.ok || rewardResult.success === false) {
+          console.error(
+            "[REWARDS] ตรวจสอบรางวัลไม่สำเร็จ:",
+            rewardResult.message
+          );
+        } else if (rewardResult.newlyUnlocked?.length > 0) {
+          console.log(
+            "[REWARDS] ปลดล็อกรางวัลใหม่:",
+            rewardResult.newlyUnlocked
+          );
+        }
+      } catch (rewardError) {
+        // หากตรวจสอบรางวัลผิดพลาด ไม่ให้กระทบการบันทึกรีวิว
+        console.error("[REWARDS] Error:", rewardError);
+      }
+
+      // ======================================================
+      // 8. รีเฟรชข้อมูล Feed
       // ======================================================
       if (onReviewPosted) {
         await onReviewPosted();

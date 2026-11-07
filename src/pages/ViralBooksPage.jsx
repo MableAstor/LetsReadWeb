@@ -6,72 +6,92 @@ const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
 
-// ใช้ตรวจสอบสัปดาห์และเดือนตามเวลาไทย
-function getBangkokPeriodKey(period) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+// ======================================================
+// ตรวจสอบเดือนปัจจุบันตามเวลาไทย
+// ใช้ตรวจจับเมื่อเปลี่ยนเดือนเพื่อโหลด Viral Books ใหม่
+// ======================================================
+
+function getBangkokMonthKey() {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
-    day: "2-digit",
   }).formatToParts(new Date());
 
-  const year = Number(parts.find((part) => part.type === "year").value);
-  const month = Number(parts.find((part) => part.type === "month").value);
-  const day = Number(parts.find((part) => part.type === "day").value);
+  const year = parts.find(
+    (part) => part.type === "year"
+  )?.value;
 
-  // รายเดือน
-  if (period === "monthly") {
-    return `${year}-${String(month).padStart(2, "0")}`;
-  }
+  const month = parts.find(
+    (part) => part.type === "month"
+  )?.value;
 
-  // รายสัปดาห์ เริ่มวันจันทร์
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const dayOfWeek = date.getUTCDay();
-  const daysSinceMonday = (dayOfWeek + 6) % 7;
-
-  date.setUTCDate(date.getUTCDate() - daysSinceMonday);
-
-  return date.toISOString().slice(0, 10);
+  return `${year}-${month}`;
 }
 
+// ======================================================
+// VIRAL BOOKS PAGE
+// ======================================================
+
 export default function ViralBooksPage() {
-  const [viralPeriod, setViralPeriod] = useState("weekly");
   const [viralBooks, setViralBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // ======================================================
+  // โหลด Viral Books รายเดือนจาก Backend
+  // ======================================================
+
   useEffect(() => {
     let controller;
-    let currentPeriodKey = getBangkokPeriodKey(viralPeriod);
+    let currentMonthKey = getBangkokMonthKey();
 
     // ดึงข้อมูลหนังสือ Viral จาก Backend
     const fetchViralBooks = async () => {
+      // ยกเลิกคำขอก่อนหน้า หากมีการโหลดใหม่
       controller?.abort();
-      controller = new AbortController();
+
+      const requestController = new AbortController();
+      controller = requestController;
 
       setLoading(true);
       setError("");
 
       try {
         const response = await fetch(
-          `${API_URL}/viral-books?period=${viralPeriod}`,
-          { signal: controller.signal }
+          `${API_URL}/viral-books`,
+          {
+            signal: requestController.signal,
+          }
         );
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-          throw new Error(data.message || data.error || "ไม่สามารถโหลดข้อมูลได้");
+        if (
+          !response.ok ||
+          data.success === false
+        ) {
+          throw new Error(
+            data.message ||
+              data.error ||
+              "ไม่สามารถโหลดข้อมูลได้"
+          );
         }
 
-        const books = Array.isArray(data) ? data : data.books;
+        // รองรับข้อมูลจาก Backend ทั้งแบบ Array และ Object
+        const books = Array.isArray(data)
+          ? data
+          : data.books;
 
         if (!Array.isArray(books)) {
-          throw new Error("รูปแบบข้อมูลจาก Backend ไม่ถูกต้อง");
+          throw new Error(
+            "รูปแบบข้อมูลจาก Backend ไม่ถูกต้อง"
+          );
         }
 
         const formattedBooks = books.map((book) => {
-          const reviewCount = Number(book.Review_Count) || 0;
+          const reviewCount =
+            Number(book.Review_Count) || 0;
 
           return {
             id: book.BooksID,
@@ -84,39 +104,58 @@ export default function ViralBooksPage() {
           };
         });
 
-        setViralBooks(formattedBooks);
+        if (!requestController.signal.aborted) {
+          setViralBooks(formattedBooks);
+        }
       } catch (err) {
         if (err.name !== "AbortError") {
-          console.error("Fetch Viral Books Error:", err);
-          setError(err.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล");
+          console.error(
+            "[Viral Books] Fetch error:",
+            err
+          );
+
+          setError(
+            err.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล"
+          );
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (!requestController.signal.aborted) {
           setLoading(false);
         }
       }
     };
 
+    // โหลดข้อมูลครั้งแรก
     fetchViralBooks();
 
-    // ตรวจสอบเมื่อเปลี่ยนสัปดาห์หรือเดือน
-    const interval = setInterval(() => {
-      const newPeriodKey = getBangkokPeriodKey(viralPeriod);
+    // ======================================================
+    // ตรวจจับการเปลี่ยนเดือนตามเวลาไทย
+    // หากขึ้นเดือนใหม่ ให้โหลด Viral Books ใหม่
+    // ======================================================
 
-      if (newPeriodKey !== currentPeriodKey) {
-        currentPeriodKey = newPeriodKey;
+    const interval = window.setInterval(() => {
+      const newMonthKey = getBangkokMonthKey();
+
+      if (newMonthKey !== currentMonthKey) {
+        currentMonthKey = newMonthKey;
+
+        console.log(
+          "[Viral Books] New month detected. Reloading..."
+        );
+
         fetchViralBooks();
       }
     }, 30000);
 
     return () => {
-      clearInterval(interval);
+      window.clearInterval(interval);
       controller?.abort();
     };
-  }, [viralPeriod]);
+  }, []);
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-screen-2xl px-3 py-6 pb-28">
+      {/* Page Header */}
       <div className="mb-6">
         <Link
           to="/"
@@ -134,34 +173,28 @@ export default function ViralBooksPage() {
         </p>
       </div>
 
-      {/* เลือกช่วงเวลาการจัดอันดับ */}
-      <div className="mb-6 flex gap-2">
-        <button
-          onClick={() => setViralPeriod("weekly")}
-          aria-pressed={viralPeriod === "weekly"}
-          className={`rounded-full px-5 py-2 text-sm font-medium transition ${
-            viralPeriod === "weekly"
-              ? "bg-[#C65B61] text-white"
-              : "bg-[#F8EEEE] text-[#9B8583] hover:bg-[#F2DDDD]"
-          }`}
-        >
-          รายสัปดาห์
-        </button>
+      {/* ======================================================
+          แสดงช่วงเวลาการจัดอันดับรายเดือน
+         ====================================================== */}
 
-        <button
-          onClick={() => setViralPeriod("monthly")}
-          aria-pressed={viralPeriod === "monthly"}
-          className={`rounded-full px-5 py-2 text-sm font-medium transition ${
-            viralPeriod === "monthly"
-              ? "bg-[#C65B61] text-white"
-              : "bg-[#F8EEEE] text-[#9B8583] hover:bg-[#F2DDDD]"
-          }`}
+      <div className="mb-6 flex gap-2">
+        <span
+          className="
+            rounded-full
+            bg-[#C65B61]
+            px-5 py-2
+            text-sm font-medium
+            text-white
+          "
         >
           รายเดือน
-        </button>
+        </span>
       </div>
 
-      {/* แสดงรายการหนังสือ */}
+      {/* ======================================================
+          แสดงรายการหนังสือ
+         ====================================================== */}
+
       {loading ? (
         <p className="py-10 text-center text-[#9B8583]">
           กำลังโหลดข้อมูลหนังสือ...
@@ -172,12 +205,15 @@ export default function ViralBooksPage() {
         </p>
       ) : viralBooks.length === 0 ? (
         <p className="py-10 text-center text-[#9B8583]">
-          ยังไม่มีหนังสือในช่วงเวลานี้
+          ยังไม่มีหนังสือในเดือนนี้
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-7">
           {viralBooks.map((book) => (
-            <BookCard key={book.id} book={book} />
+            <BookCard
+              key={book.id}
+              book={book}
+            />
           ))}
         </div>
       )}

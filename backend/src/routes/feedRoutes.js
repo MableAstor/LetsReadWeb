@@ -1,4 +1,3 @@
-
 import express from "express";
 import { supabase, supabaseAdmin } from "../config/supabase.js";
 import { getOrCreateUserProfile } from "./authRoutes.js";
@@ -63,7 +62,9 @@ router.get("/reviews/test", async (req, res) => {
       const { data, error: usersError } =
         await supabaseAdmin
           .from("User")
-          .select("UserID, User_Name")
+          .select(
+            "UserID, User_Name, User_Avatar_URL, Active_Frame_RewardsID"
+          )
           .in("UserID", userIds);
 
       console.log("[REVIEW] Users query:", {
@@ -81,11 +82,15 @@ router.get("/reviews/test", async (req, res) => {
       users = data || [];
     }
 
-    // จับคู่รีวิวกับชื่อผู้ใช้
+    // จับคู่รีวิวกับข้อมูลเจ้าของรีวิว
     const userMap = new Map(
       users.map((user) => [
         String(user.UserID),
-        user.User_Name,
+        {
+          User_Name: user.User_Name,
+          User_Avatar_URL: user.User_Avatar_URL,
+          Active_Frame_RewardsID: user.Active_Frame_RewardsID,
+        },
       ])
     );
 
@@ -227,17 +232,31 @@ router.get("/reviews/test", async (req, res) => {
     );
 
     // ======================================================
-    // รวมข้อมูลรีวิว ชื่อผู้ใช้ รูปปก Like และ Save
+    // รวมข้อมูลรีวิว ชื่อผู้ใช้ รูปโปรไฟล์ กรอบ
+    // รูปปก Like และ Save
     // ======================================================
     const formattedReviews = reviews.map((review) => {
       const reviewKey = String(review.ReviewsID);
 
+      const reviewUser = userMap.get(
+        String(review.UserID)
+      );
+
       return {
         ...review,
+
         Books_Cover:
           bookCoverMap.get(String(review.BooksID)) || null,
+
         User_Name:
-          userMap.get(String(review.UserID)) || "ผู้ใช้",
+          reviewUser?.User_Name || "ผู้ใช้",
+
+        User_Avatar_URL:
+          reviewUser?.User_Avatar_URL || null,
+
+        Active_Frame_RewardsID:
+          reviewUser?.Active_Frame_RewardsID ?? null,
+
         Like_Count: likeCountMap.get(reviewKey) || 0,
         Liked_By_Me: likedReviewIds.has(reviewKey),
         Saved_By_Me: savedReviewIds.has(reviewKey),
