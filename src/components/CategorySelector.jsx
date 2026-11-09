@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Search, BookOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +17,68 @@ import { Button } from "./ui/button";
 const API_BASE = (
   import.meta.env.VITE_RECOMMENDER_API_URL || "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
+
+const BACKEND_API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+// Extract FastAPI validation details, including the path of a missing field.
+function describeApiError(payload, status, service) {
+  const detail = payload?.detail ?? payload?.message ?? payload?.error;
+  const message = Array.isArray(detail)
+    ? detail.map((item) => {
+        const location = Array.isArray(item?.loc) ? item.loc.join(".") : "request";
+        return `${location}: ${item?.msg || "invalid value"}`;
+      }).join("; ")
+    : typeof detail === "string"
+      ? detail
+      : detail != null
+        ? JSON.stringify(detail)
+        : "ไม่พบรายละเอียดเพิ่มเติม";
+
+  return `${service} HTTP ${status}: ${message}`;
+}
+
+// The server rebuilds/reads *persisted* User_Preferences from Swipe_History.
+// Empty [] is valid for a new user. Never replace a failed request with [].
+async function loadUserPreferences(accessToken) {
+  const response = await fetch(`${BACKEND_API_URL}/api/swipes/rebuild-preferences`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok || payload?.success !== true) {
+    if (response.status === 404) {
+      throw new Error("ไม่พบ /api/swipes/rebuild-preferences ใน Express Backend — กรุณาใช้ swipeRoutes.js เวอร์ชันใหม่");
+    }
+    throw new Error(describeApiError(payload, response.status, "โหลด User_Preferences ไม่สำเร็จ:"));
+  }
+  if (!Array.isArray(payload.preferences)) {
+    throw new Error("Backend ต้องส่ง preferences เป็น Array (ผู้ใช้ใหม่ต้องเป็น [])");
+  }
+
+  // Python matches category *names*, not just numeric IDs.
+  payload.preferences.forEach((row, index) => {
+    const kind = String(row?.type ?? row?.kind ?? "").toLowerCase();
+    const typedLabel = ["main", "category", "categorise", "sub", "subcategory", "subcategorise"]
+      .includes(kind) && typeof row?.label === "string" && row.label.trim();
+    const hasMainName = ["Categorise_Name", "category", "categories", "main_category", "main_categories"]
+      .some((key) => Boolean(row?.[key]));
+    const hasSubName = ["Subcategorise_Name", "subcategory", "subcategories", "sub_category"]
+      .some((key) => Boolean(row?.[key]));
+    if (!row || typeof row !== "object" || Array.isArray(row) ||
+        !(typedLabel || hasMainName || hasSubName)) {
+      throw new Error(`User_Preferences[${index}] ไม่มีชื่อหมวด (Categorise_Name / Subcategorise_Name หรือ type + label)`);
+    }
+  });
+  return payload.preferences;
+}
 
 // Supabase embeds may return a related row as an object or an array.
 function asRows(value) {
@@ -37,6 +99,7 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
   const [subCategories, setSubCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [searching, setSearching] = useState(false);
+  const searchingRef = useRef(false);
 
   // Load both category lists from the actual Supabase tables.
   useEffect(() => {
@@ -125,47 +188,44 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
       toast.warning("กรุณาเลือกหมวดหลักอย่างน้อย 1 หมวดก่อนค้นหานะคะ");
       return;
     }
-    if (searching) return;
-
-    const { data: sessionData, error: sessionError } =
-  await supabase.auth.getSession();
-
-console.log("[DEBUG] Session error:", sessionError);
-console.log("[DEBUG] Has session:", !!sessionData?.session);
-console.log("[DEBUG] Auth user:", sessionData?.session?.user?.id);
-
+    if (searchingRef.current) return;
+    searchingRef.current = true;
     setSearching(true);
     try {
-      const { data, error } = await supabase
-        .from("Books")
-        .select(`
-          BooksID,
-          Books_title,
-          Books_Cover,
-          Book_Synopsis,
-          Book_Categorise (
-            Categorise (
-              CategoriseID,
-              Categorise_Name
-            )
-          ),
-          Book_Subcategorise (
-            Subcategorise (
-              SubcategoriseID,
-              Subcategorise_Name
-            )
-          )
-        `);
-         console.log("[DEBUG] Books query error:", error);
-      console.log("[DEBUG] Books raw data:", data);
-      console.log("[DEBUG] Books raw count:", data?.length);
+      // Authenticate before requesting private preferences from Express.
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error("กรุณาเข้าสู่ระบบก่อนค้นหาหนังสือ");
 
-      if (error) {
-        console.error("Load books with category relations error:", error);
-        toast.error(
-          "โหลดหนังสือหรือความสัมพันธ์หมวดหมู่ไม่สำเร็จ กรุณาตรวจสอบ Foreign Key และ RLS ใน Supabase"
-        );
-        return;
+      const preferences = await loadUserPreferences(accessToken);
+
+      // Read all pages: Supabase may cap a SELECT response at 1,000 rows.
+      const data = [];
+      const pageSize = 500;
+      for (let start = 0; ; start += pageSize) {
+        const { data: page, error } = await supabase
+          .from("Books")
+          .select(`
+            BooksID,
+            Books_title,
+            Books_Cover,
+            Book_Synopsis,
+            Book_Categorise (
+              Categorise (CategoriseID, Categorise_Name)
+            ),
+            Book_Subcategorise (
+              Subcategorise (SubcategoriseID, Subcategorise_Name)
+            )
+          `)
+          .order("BooksID", { ascending: true })
+          .range(start, start + pageSize - 1);
+
+        if (error) {
+          throw new Error(`โหลดหนังสือหรือความสัมพันธ์หมวดหมู่ไม่สำเร็จ: ${error.message}`);
+        }
+        data.push(...(page ?? []));
+        if (!page || page.length < pageSize) break;
       }
 
       // Keep the real category and subcategory labels on every book sent to Python.
@@ -211,7 +271,7 @@ console.log("[DEBUG] Auth user:", sessionData?.session?.user?.id);
         "[Supabase] Subcategory coverage:",
         `${(subcategoryCoverage * 100).toFixed(1)}%`
       );
-      console.info("[Supabase] Sample mapped book:", allBooks[0] ?? null);
+      console.info("[Supabase] Sample mapped book ID:", allBooks[0]?.id ?? null);
 
       if (allBooks.length > 0 && booksWithSubcategories === 0) {
         toast.warning(
@@ -240,6 +300,8 @@ console.log("[DEBUG] Auth user:", sessionData?.session?.user?.id);
         return matchesMain && matchesSub;
       }).length;
 
+      // Python v3 expects preferences/user_preferences, including [] for new users.
+      // Likes/Dislikes no longer construct the user's preference profile.
       const initialResponse = await fetch(`${API_BASE}/next-book`, {
         method: "POST",
         headers: {
@@ -247,8 +309,8 @@ console.log("[DEBUG] Auth user:", sessionData?.session?.user?.id);
           Accept: "application/json",
         },
         body: JSON.stringify({
-          likes: [],
-          dislikes: [],
+          preferences,
+          user_preferences: preferences, // Compatibility with Python v3.2 variants.
           swiped: [],
           pool: allBooks,
           selected_categories: mainCategories,
@@ -257,12 +319,7 @@ console.log("[DEBUG] Auth user:", sessionData?.session?.user?.id);
       });
       const initialPayload = await initialResponse.json().catch(() => null);
       if (!initialResponse.ok) {
-        const detail = initialPayload?.detail;
-        throw new Error(
-          typeof detail === "string"
-            ? detail
-            : `Python Recommendation API ตอบกลับ HTTP ${initialResponse.status}`
-        );
+        throw new Error(describeApiError(initialPayload, initialResponse.status, "Python /next-book"));
       }
 
       const initialBook = initialPayload?.book;
@@ -288,9 +345,10 @@ console.log("[DEBUG] Auth user:", sessionData?.session?.user?.id);
         },
       });
     } catch (error) {
-      console.error("Unexpected search error:", error);
-      toast.error("เกิดข้อผิดพลาดขณะค้นหาหนังสือ");
+      console.error("[CATEGORY] Search failed:", error);
+      toast.error(error?.message || "เกิดข้อผิดพลาดขณะค้นหาหนังสือ");
     } finally {
+      searchingRef.current = false;
       setSearching(false);
     }
   };

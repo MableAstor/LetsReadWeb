@@ -21,7 +21,10 @@ import {
   closeSession,
 } from "../services/sessionService";
 
-import { saveSwipeHistory } from "../services/swipeService";
+import {
+  saveSwipeHistory,
+  rebuildPreferences,
+} from "../services/swipeService";
 
 import SwipeBookCard from "../components/swipe/SwipeBookCard";
 import LikedBooksPanel from "../components/swipe/LikedBooksPanel";
@@ -30,7 +33,7 @@ import PauseDialog from "../components/swipe/PauseDialog";
 
 import usePauseTimer from "../hooks/usePauseTimer";
 
-// รองรับชื่อ field ที่อาจมาจาก API หลายรูปแบบ
+// รองรับชื่อ field จาก API หลายรูปแบบ
 const getBookCategory = (book) =>
   book?.category ??
   book?.main_category ??
@@ -48,7 +51,11 @@ const getBookSubcategories = (book) => {
     "";
 
   if (Array.isArray(raw)) {
-    return [...new Set(raw.map((item) => String(item).trim()).filter(Boolean))];
+    return [
+      ...new Set(
+        raw.map((item) => String(item).trim()).filter(Boolean)
+      ),
+    ];
   }
 
   return [
@@ -56,10 +63,11 @@ const getBookSubcategories = (book) => {
       String(raw)
         .split(/[•,]/)
         .map((item) => item.trim())
-        .filter(Boolean),
+        .filter(Boolean)
     ),
   ];
 };
+
 const getBookId = (book) =>
   book?.BooksID ??
   book?.books_id ??
@@ -70,16 +78,20 @@ const getBookId = (book) =>
 export default function Swipeforbooks() {
   const navigate = useNavigate();
   const location = useLocation();
+
   const { userId, profileLoading } = useAuth();
 
-  // Session
-  const [sessionId, setSessionId] = useState(null);
+  // ป้องกันการสร้าง Session ซ้ำ
   const [sessionLoading, setSessionLoading] = useState(true);
-
   const sessionIdRef = useRef(null);
   const sessionPromiseRef = useRef(null);
+  const closingRef = useRef(null);
 
-  // Swipe gesture
+  // ป้องกันการส่ง Swipe ซ้ำ
+  const busyRef = useRef(false);
+  const pendingSwipeRef = useRef(null);
+
+  // Drag state
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -101,42 +113,51 @@ export default function Swipeforbooks() {
     handlePauseOpenChange,
   } = usePauseTimer();
 
-  // Recommendation data
+  // ข้อมูลจากหน้าเลือกหมวดหมู่
   const routeState = location.state ?? {};
 
-  const recommendationPool = Array.isArray(routeState.recommendationPool)
+  const recommendationPool = Array.isArray(
+    routeState.recommendationPool
+  )
     ? routeState.recommendationPool
     : Array.isArray(routeState.bookList)
       ? routeState.bookList
       : [];
 
-  const selectedCategories = Array.isArray(routeState.selectedCategories)
+  const selectedCategories = Array.isArray(
+    routeState.selectedCategories
+  )
     ? routeState.selectedCategories
     : [];
 
-  const selectedSubcategories = Array.isArray(routeState.selectedSubcategories)
+  const selectedSubcategories = Array.isArray(
+    routeState.selectedSubcategories
+  )
     ? routeState.selectedSubcategories
     : [];
 
   const initialBook =
-    routeState.initialBook ?? routeState.bookList?.[0] ?? null;
+    routeState.initialBook ??
+    routeState.bookList?.[0] ??
+    null;
 
   const [currentBook, setCurrentBook] = useState(initialBook);
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   const [likedBooks, setLikedBooks] = useState([]);
   const [dislikedBooks, setDislikedBooks] = useState([]);
   const [swipedBooks, setSwipedBooks] = useState([]);
 
-  // Dialogs and recommendation status
   const [showStopModal, setShowStopModal] = useState(false);
   const [isSelectingNext, setIsSelectingNext] = useState(false);
-  const [recommendationError, setRecommendationError] = useState("");
+  const [recommendationError, setRecommendationError] =
+    useState("");
 
-  // สร้าง Session
+  // สร้าง Session หนึ่งครั้งต่อการเข้าใช้งานหน้านี้
   const ensureSession = async () => {
     if (!userId) {
-      throw new Error("ไม่พบ UserID กรุณาเข้าสู่ระบบใหม่");
+      throw new Error(
+        "กรุณาเข้าสู่ระบบก่อนเริ่มปัดหนังสือ"
+      );
     }
 
     if (sessionIdRef.current) {
@@ -147,34 +168,42 @@ export default function Swipeforbooks() {
       return sessionPromiseRef.current;
     }
 
-    sessionPromiseRef.current = (async () => {
-      const newSessionId = await createSession();
+    sessionPromiseRef.current = createSession()
+      .then((newSessionId) => {
+        sessionIdRef.current = newSessionId;
+        return newSessionId;
+      })
+      .catch((error) => {
+        sessionPromiseRef.current = null;
+        throw error;
+      });
 
-      sessionIdRef.current = newSessionId;
-      setSessionId(newSessionId);
-
-      return newSessionId;
-    })();
-
-    try {
-      return await sessionPromiseRef.current;
-    } catch (error) {
-      sessionPromiseRef.current = null;
-      throw error;
-    }
+    return sessionPromiseRef.current;
   };
 
   // ปิด Session
   const closeCurrentSession = async () => {
-    const activeSessionId = sessionIdRef.current;
+    if (
+      !sessionIdRef.current &&
+      sessionPromiseRef.current
+    ) {
+      await sessionPromiseRef.current;
+    }
 
-    if (!activeSessionId || !userId) return;
+    if (!sessionIdRef.current) return;
 
-    await closeSession(activeSessionId);
+    if (!closingRef.current) {
+      closingRef.current = closeSession(
+        sessionIdRef.current
+      ).finally(() => {
+        closingRef.current = null;
+      });
+    }
 
-    console.log("[Session] Closed:", activeSessionId);
+    return closingRef.current;
   };
 
+  // เปิด Session เมื่อเข้าหน้า Swipe
   useEffect(() => {
     if (profileLoading) return;
 
@@ -183,26 +212,26 @@ export default function Swipeforbooks() {
       return;
     }
 
-    let cancelled = false;
+    let active = true;
 
-    const startSession = async () => {
-      try {
-        setSessionLoading(true);
-        await ensureSession();
-      } catch (error) {
-        console.error("[Session] Create failed:", error);
-        toast.error(`สร้าง Session ไม่สำเร็จ: ${error.message}`);
-      } finally {
-        if (!cancelled) {
+    setSessionLoading(true);
+
+    ensureSession()
+      .catch((error) => {
+        if (active) {
+          toast.error(
+            `สร้าง Session ไม่สำเร็จ: ${error.message}`
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
           setSessionLoading(false);
         }
-      }
-    };
-
-    startSession();
+      });
 
     return () => {
-      cancelled = true;
+      active = false;
     };
   }, [userId, profileLoading]);
 
@@ -210,16 +239,32 @@ export default function Swipeforbooks() {
   const goToResult = async (
     finalLikes,
     finalDislikes = dislikedBooks,
-    finalSwiped = swipedBooks,
+    finalSwiped = swipedBooks
   ) => {
+    if (
+      pendingSwipeRef.current &&
+      !pendingSwipeRef.current.committed
+    ) {
+      setRecommendationError(
+        "มีรายการ Swipe ที่ยังไม่ยืนยัน กรุณากดลองอีกครั้งก่อนดูผล"
+      );
+      return false;
+    }
+
     try {
       await closeCurrentSession();
     } catch (error) {
-      console.error("[Session] Close failed:", error);
-      toast.error("ปิด Session ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อ");
+      setRecommendationError(
+        `ปิด Session ไม่สำเร็จ: ${error.message}`
+      );
+      toast.error(
+        "ปิด Session ไม่สำเร็จ กรุณาลองอีกครั้ง"
+      );
+      return false;
     }
 
     navigate("/Result", {
+      replace: true,
       state: {
         likedBooks: finalLikes,
         dislikedBooks: finalDislikes,
@@ -230,9 +275,11 @@ export default function Swipeforbooks() {
         sessionId: sessionIdRef.current,
       },
     });
+
+    return true;
   };
 
-  // Reset การลากการ์ด
+  // คืนค่าตำแหน่งการ์ด
   const resetDrag = () => {
     setDragX(0);
     dragOffsetRef.current = 0;
@@ -241,118 +288,189 @@ export default function Swipeforbooks() {
     setIsDragging(false);
   };
 
-  // เริ่มพักการปัด
   const startPause = () => {
     resetDrag();
     setShowStopModal(false);
     startPauseTimer();
   };
 
-  // วิเคราะห์ผลจากหน้าต่างพัก
   const analyzeFromPause = () => {
     goToResult(likedBooks, dislikedBooks, swipedBooks);
   };
 
-  // เลือกหนังสือถัดไปจาก Python Recommendation
+  // ฟังก์ชันหลัก: บันทึก Swipe -> Preference -> Python
   const advanceAfterSwipe = async (action) => {
-    if (!currentBook || isSelectingNext || isPaused) return;
+    if (
+      busyRef.current ||
+      !currentBook ||
+      isPaused ||
+      profileLoading ||
+      sessionLoading ||
+      !userId
+    ) {
+      resetDrag();
+      return;
+    }
 
-    const updatedLikes =
-      action === "like" ? [...likedBooks, currentBook] : likedBooks;
+    const bookId = getBookId(currentBook);
 
-    const updatedDislikes =
-      action === "dislike" ? [...dislikedBooks, currentBook] : dislikedBooks;
+    if (
+      !Number.isSafeInteger(Number(bookId)) ||
+      Number(bookId) <= 0
+    ) {
+      setRecommendationError(
+        "ข้อมูลหนังสือไม่มี BooksID ที่ถูกต้อง"
+      );
+      return;
+    }
 
-    const updatedSwiped = [...swipedBooks, currentBook];
-
-    const apiBase = (
-      import.meta.env.VITE_RECOMMENDER_API_URL || "http://127.0.0.1:8000"
-    ).replace(/\/+$/, "");
-
+    busyRef.current = true;
     setIsSelectingNext(true);
     setRecommendationError("");
 
     try {
-      const activeSessionId = await ensureSession();
+      let pending = pendingSwipeRef.current;
 
-      console.log("[DEBUG] Session ready:", activeSessionId);
-      console.log("[DEBUG] Current book:", currentBook);
-      console.log("[DEBUG] User ID:", userId);
-      console.log("[DEBUG] Calling Python API:", `${apiBase}/next-book`);
-      console.log("[FEEDBACK TEST]", {
-  action,
-  likes: updatedLikes.map((book) => ({
-    title: book.title,
-    subcategories: book.subcategories,
-  })),
-  dislikes: updatedDislikes.map((book) => ({
-    title: book.title,
-    subcategories: book.subcategories,
-  })),
-});
+      if (
+        pending &&
+        (
+          String(pending.bookId) !== String(bookId) ||
+          pending.action !== action
+        )
+      ) {
+        throw new Error(
+          `Swipe ก่อนหน้านี้ยังไม่เสร็จ กรุณาลองทำรายการ ${pending.action} อีกครั้ง`
+        );
+      }
 
+      // สร้าง requestId ครั้งเดียวต่อ Swipe
+      if (!pending) {
+        if (!globalThis.crypto?.randomUUID) {
+          throw new Error(
+            "Browser นี้ไม่รองรับการสร้าง requestId แบบปลอดภัย"
+          );
+        }
+
+        pending = {
+          action,
+          bookId: Number(bookId),
+          requestId: globalThis.crypto.randomUUID(),
+          committed: false,
+          preferences: null,
+
+          updatedLikes:
+            action === "like"
+              ? [...likedBooks, currentBook]
+              : likedBooks,
+
+          updatedDislikes:
+            action === "dislike"
+              ? [...dislikedBooks, currentBook]
+              : dislikedBooks,
+
+          updatedSwiped: [
+            ...swipedBooks,
+            currentBook,
+          ],
+        };
+
+        pendingSwipeRef.current = pending;
+      }
+
+      // STEP 1: บันทึก Swipe ก่อน
+      if (!pending.committed) {
+        const activeSessionId = await ensureSession();
+
+        const result = await saveSwipeHistory({
+          action: pending.action,
+          bookId: pending.bookId,
+          sessionId: activeSessionId,
+          requestId: pending.requestId,
+        });
+
+        // เมื่อ Backend ยืนยันแล้ว ห้าม Insert ซ้ำ
+        pending.committed = true;
+
+        setLikedBooks(pending.updatedLikes);
+        setDislikedBooks(pending.updatedDislikes);
+        setSwipedBooks(pending.updatedSwiped);
+
+        if (
+          result.preferencesUpdated === true &&
+          Array.isArray(result.preferences)
+        ) {
+          pending.preferences = result.preferences;
+        }
+      }
+
+      // STEP 2: โหลด Preference หากยังไม่มี
+      if (!Array.isArray(pending.preferences)) {
+        pending.preferences = await rebuildPreferences();
+      }
+
+      // STEP 3: เรียก Python ด้วย preferences ล่าสุด
       const payload = await getNextBook({
-        apiBase,
-        likes: updatedLikes,
-        dislikes: updatedDislikes,
-        swiped: updatedSwiped,
+        preferences: pending.preferences,
+        swiped: pending.updatedSwiped,
         pool: recommendationPool,
         selectedCategories,
         selectedSubcategories,
       });
 
-      console.log("[DEBUG] Python response:", payload);
+      // STEP 4: หนังสือหมดแล้ว ไปหน้า Result
+      if (!payload.book) {
+        const finished = await goToResult(
+          pending.updatedLikes,
+          pending.updatedDislikes,
+          pending.updatedSwiped
+        );
 
-      const bookId = getBookId(currentBook);
+        if (finished) {
+          pendingSwipeRef.current = null;
+        }
 
-if (
-  bookId === null ||
-  bookId === undefined ||
-  !Number.isSafeInteger(Number(bookId)) ||
-  Number(bookId) <= 0
-) {
-  throw new Error(
-    `ไม่พบ BooksID ที่ถูกต้อง: ${JSON.stringify(currentBook)}`
-  );
-}
-
-await saveSwipeHistory({
-  action,
-  bookId: Number(bookId),
-  sessionId: activeSessionId,
-});
-
-console.log("[DEBUG] Swipe history saved successfully");
-
-      setLikedBooks(updatedLikes);
-      setDislikedBooks(updatedDislikes);
-      setSwipedBooks(updatedSwiped);
-
-      if (!payload?.book) {
-        resetDrag();
-        await goToResult(updatedLikes, updatedDislikes, updatedSwiped);
         return;
       }
 
+      // ป้องกัน Python ส่งหนังสือเล่มเก่ากลับมา
+      if (
+        pending.updatedSwiped.some(
+          (item) =>
+            String(getBookId(item)) ===
+            String(getBookId(payload.book))
+        )
+      ) {
+        throw new Error(
+          "Recommendation API เลือกหนังสือที่ปัดไปแล้ว"
+        );
+      }
+
+      // STEP 5: แสดงหนังสือถัดไป
       setCurrentBook(payload.book);
-      setCurrentIndex((previous) => previous + 1);
+      pendingSwipeRef.current = null;
 
-      resetDrag();
     } catch (error) {
-      console.error("Failed to choose next book:", error);
+      console.error("[SWIPE]", error);
 
-      resetDrag();
+      const pending = pendingSwipeRef.current;
 
       setRecommendationError(
-        `${error?.message || "เรียก Python เพื่อเลือกหนังสือถัดไปไม่สำเร็จ"} กรุณาตรวจว่า recommendation-service ใช้โค้ดเวอร์ชันใหม่และยังรันอยู่`,
+        pending?.committed
+          ? `บันทึก Swipe แล้ว แต่ยังเลือกหนังสือถัดไปไม่ได้: ${error.message} (กดลองต่อโดยไม่บันทึกซ้ำ)`
+          : error.message ||
+            "Swipe ไม่สำเร็จ กดลองใหม่"
       );
 
-      toast.error(error?.message || "ดำเนินการ Swipe ไม่สำเร็จ");
+      toast.error(
+        pending?.committed
+          ? "บันทึก Swipe แล้ว กรุณากดลองต่อ"
+          : error.message || "Swipe ไม่สำเร็จ"
+      );
     } finally {
+      resetDrag();
+      busyRef.current = false;
       setIsSelectingNext(false);
     }
-
-    
   };
 
   const handleLike = () => advanceAfterSwipe("like");
@@ -362,10 +480,14 @@ console.log("[DEBUG] Swipe history saved successfully");
   const handlePointerDown = (event) => {
     if (
       isSelectingNext ||
+      sessionLoading ||
+      profileLoading ||
+      !userId ||
       isPaused ||
       showStopModal ||
       showPauseModal ||
-      !currentBook
+      !currentBook ||
+      pendingSwipeRef.current != null
     ) {
       return;
     }
@@ -389,7 +511,6 @@ console.log("[DEBUG] Swipe history saved successfully");
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  // ขยับการ์ดตามนิ้วหรือเมาส์
   const handlePointerMove = (event) => {
     if (
       isPaused ||
@@ -399,13 +520,13 @@ console.log("[DEBUG] Swipe history saved successfully");
       return;
     }
 
-    const offset = event.clientX - dragStartRef.current;
+    const offset =
+      event.clientX - dragStartRef.current;
 
     dragOffsetRef.current = offset;
     setDragX(offset);
   };
 
-  // ปล่อยการ์ด
   const handlePointerUp = (event) => {
     if (
       isPaused ||
@@ -421,10 +542,10 @@ console.log("[DEBUG] Swipe history saved successfully");
     setIsDragging(false);
 
     if (Math.abs(offset) >= 110) {
-      const action = offset > 0 ? "like" : "dislike";
+      const action =
+        offset > 0 ? "like" : "dislike";
 
       setDragX(offset > 0 ? 600 : -600);
-
       advanceAfterSwipe(action);
     } else {
       setDragX(0);
@@ -436,12 +557,14 @@ console.log("[DEBUG] Swipe history saved successfully");
     resetDrag();
   };
 
-  // ข้อมูลหนังสือปัจจุบัน
   const category = getBookCategory(currentBook);
   const subcategories = getBookSubcategories(currentBook);
 
-  // กรณีไม่มีหนังสือให้แสดง
-  if (recommendationPool.length === 0 || !currentBook) {
+  // กรณีไม่มีหนังสือ
+  if (
+    recommendationPool.length === 0 ||
+    !currentBook
+  ) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-gradient-to-tr from-[#ffe8df] via-[#fcd8cd] to-[#fdedcd] px-6 text-center font-sans">
         <BookOpen className="h-12 w-12 text-rose-400" />
@@ -451,8 +574,8 @@ console.log("[DEBUG] Swipe history saved successfully");
         </h2>
 
         <p className="max-w-sm text-sm leading-relaxed text-gray-600">
-          กรุณากลับไปเลือกหมวดหมู่หนังสืออีกครั้ง หากยังไม่พบหนังสือ
-          โปรดตรวจสอบการโหลดข้อมูลจาก Supabase
+          กรุณากลับไปเลือกหมวดหมู่หนังสืออีกครั้ง
+          หากยังไม่พบหนังสือ โปรดตรวจสอบการโหลดข้อมูลจาก Supabase
         </p>
 
         <Button
@@ -463,8 +586,13 @@ console.log("[DEBUG] Swipe history saved successfully");
             try {
               await closeCurrentSession();
             } catch (error) {
-              console.error("[Session] Close failed:", error);
-              toast.error("ปิด Session ไม่สำเร็จ");
+              console.error(
+                "[Session] Close failed:",
+                error
+              );
+              toast.error(
+                "ปิด Session ไม่สำเร็จ"
+              );
               return;
             }
 
@@ -493,13 +621,35 @@ console.log("[DEBUG] Swipe history saved successfully");
       <div className="pointer-events-none absolute -bottom-20 left-1/3 -z-10 h-80 w-80 rounded-full bg-rose-200/30 blur-3xl" />
 
       <div className="relative z-10 mx-auto w-full max-w-5xl">
-        {/* Header */}
         <header className="flex w-full flex-wrap items-center justify-between gap-2 pb-4 sm:gap-3 sm:pb-6">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => navigate(-1)}
+            onClick={async () => {
+              if (busyRef.current) return;
+
+              if (
+                pendingSwipeRef.current &&
+                !pendingSwipeRef.current.committed
+              ) {
+                setRecommendationError(
+                  "กรุณายืนยัน Swipe ที่ค้างอยู่ก่อนย้อนกลับ"
+                );
+                return;
+              }
+
+              try {
+                await closeCurrentSession();
+                navigate("/category", {
+                  replace: true,
+                });
+              } catch (error) {
+                toast.error(
+                  `ปิด Session ไม่สำเร็จ: ${error.message}`
+                );
+              }
+            }}
             className="h-9 rounded-full border-white/70 bg-white/80 px-3 text-xs text-gray-700 shadow-xs hover:bg-white"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -521,7 +671,9 @@ console.log("[DEBUG] Swipe history saved successfully");
             className="h-9 rounded-full border-rose-100 bg-white px-3 text-xs text-gray-800 shadow-xs hover:bg-rose-50 sm:px-4"
           >
             <Clock3 className="h-4 w-4" />
-            {isPaused ? "ดูเวลาพัก" : "หยุดพักหรือประมวลผล"}
+            {isPaused
+              ? "ดูเวลาพัก"
+              : "หยุดพักหรือประมวลผล"}
           </Button>
 
           <Badge
@@ -533,9 +685,7 @@ console.log("[DEBUG] Swipe history saved successfully");
           </Badge>
         </header>
 
-        {/* Main Layout */}
         <main className="grid w-full min-w-0 grid-cols-1 items-start justify-items-center gap-6 lg:grid-cols-2 lg:gap-8">
-          {/* LEFT: Swipe Book */}
           <section className="flex w-full min-w-0 flex-col items-center gap-3">
             <SwipeBookCard
               currentBook={currentBook}
@@ -544,7 +694,12 @@ console.log("[DEBUG] Swipe history saved successfully");
               likedCount={likedBooks.length}
               dragX={dragX}
               isDragging={isDragging}
-              isSelectingNext={isSelectingNext}
+              isSelectingNext={
+                isSelectingNext ||
+                sessionLoading ||
+                !userId ||
+                pendingSwipeRef.current != null
+              }
               isPaused={isPaused}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -554,7 +709,6 @@ console.log("[DEBUG] Swipe history saved successfully");
               onDislike={handleDislike}
             />
 
-            {/* Swipe Tip */}
             <div className="w-full max-w-[340px] space-y-2 text-center">
               <p className="rounded-full bg-white/60 px-3 py-2 text-[11px] text-gray-600">
                 ปัดขวาเพื่อถูกใจ · ปัดซ้ายเพื่อข้าม
@@ -577,38 +731,55 @@ console.log("[DEBUG] Swipe history saved successfully");
                 role="alert"
                 className="w-full max-w-[340px] rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700"
               >
-                {recommendationError}
+                <p>{recommendationError}</p>
+
+                {pendingSwipeRef.current && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isSelectingNext}
+                    onClick={() =>
+                      advanceAfterSwipe(
+                        pendingSwipeRef.current.action
+                      )
+                    }
+                    className="mt-2 rounded-full border-rose-300 bg-white text-rose-800"
+                  >
+                    ลองดำเนินการต่อ (ไม่บันทึกซ้ำ)
+                  </Button>
+                )}
               </div>
             )}
           </section>
 
-          {/* RIGHT: Liked Books */}
           <LikedBooksPanel
             likedBooks={likedBooks}
             swipedBooks={swipedBooks}
           />
         </main>
 
-        {/* Footer */}
         <footer className="mt-6 text-center text-[11px] font-medium text-gray-500">
           Let's Read — Find your next favorite story
         </footer>
       </div>
 
-      {/* Stop / Analyze Dialog */}
       <StopDialog
         open={showStopModal}
         onOpenChange={setShowStopModal}
         onPause={startPause}
         onAnalyze={() => {
           setShowStopModal(false);
-          goToResult(likedBooks, dislikedBooks, swipedBooks);
+          goToResult(
+            likedBooks,
+            dislikedBooks,
+            swipedBooks
+          );
         }}
         isSelectingNext={isSelectingNext}
         likedCount={likedBooks.length}
       />
 
-      {/* Pause Timer Dialog */}
       <PauseDialog
         open={showPauseModal}
         onOpenChange={handlePauseOpenChange}
