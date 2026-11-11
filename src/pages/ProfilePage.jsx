@@ -40,6 +40,9 @@ import {
   Camera,
   Trash2,
   ArrowLeft,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
@@ -386,6 +389,10 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
 
   const [profileData, setProfileData] = useState(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   const [showAllRewards, setShowAllRewards] = useState(false);
 
@@ -585,6 +592,51 @@ export default function ProfilePage() {
     user?.user_metadata?.full_name ||
     user?.email?.split("@")[0] ||
     "นักอ่าน";
+
+  const handleSaveName = async (event) => {
+    event.preventDefault();
+    const cleanName = nameDraft.trim();
+    if (!user?.id) return setNameError("กรุณาเข้าสู่ระบบก่อน");
+    if (!cleanName) return setNameError("กรุณากรอกชื่อผู้ใช้");
+    if (cleanName.length > 40) return setNameError("ชื่อผู้ใช้ต้องไม่เกิน 40 ตัวอักษร");
+    if (cleanName === username) {
+      setEditingName(false);
+      return;
+    }
+
+    setNameSaving(true);
+    setNameError("");
+    try {
+      // ตาราง User เป็นแหล่งชื่อหลักที่หน้าโปรไฟล์ใช้อ่าน
+      const { data: updated, error: dbError } = await supabase
+        .from("User")
+        .update({ User_Name: cleanName })
+        .eq("auth_user_id", user.id)
+        .select("User_Name, User_Avatar_URL, Active_Frame_RewardsID")
+        .maybeSingle();
+      if (dbError) throw dbError;
+      if (!updated) throw new Error("ไม่พบข้อมูลผู้ใช้ที่สามารถแก้ไขได้");
+      setProfileData(updated);
+      setEditingName(false);
+      setProfileMessage("เปลี่ยนชื่อผู้ใช้เรียบร้อยแล้ว");
+      setProfileError("");
+
+      // ซิงก์ชื่อที่ใช้แสดงในส่วนอื่น ๆ ของแอป
+      const { data: authUpdated, error: authError } = await supabase.auth.updateUser({
+        data: { username: cleanName, User_Name: cleanName },
+      });
+      if (authError) {
+        console.error("[Profile] Sync auth username:", authError);
+        setProfileMessage("บันทึกชื่อในโปรไฟล์แล้ว แต่ซิงก์ข้อมูลบัญชีไม่สำเร็จ");
+      } else if (authUpdated?.user) {
+        setUser(authUpdated.user);
+      }
+    } catch (error) {
+      setNameError(error.message || "เปลี่ยนชื่อไม่สำเร็จ");
+    } finally {
+      setNameSaving(false);
+    }
+  };
 
   const avatarUrl = profileData?.User_Avatar_URL || null;
 
@@ -1104,9 +1156,33 @@ export default function ProfilePage() {
             </div>
 
             <div className="min-w-0 flex-1 text-center sm:pb-2 sm:text-left">
-              <h1 className="break-words text-2xl font-extrabold tracking-tight text-[#49332F]">
-                {username}
-              </h1>
+              {editingName ? (
+                <form onSubmit={handleSaveName} className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                  <input
+                    autoFocus
+                    aria-label="ชื่อผู้ใช้ใหม่"
+                    value={nameDraft}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    maxLength={40}
+                    disabled={nameSaving}
+                    className="h-10 min-w-0 max-w-64 rounded-xl border border-[#D9AAA5] bg-white px-3 text-base font-semibold text-[#49332F] outline-none focus:ring-2 focus:ring-[#D9AAA5]"
+                  />
+                  <button type="submit" disabled={nameSaving} aria-label="บันทึกชื่อ" title="บันทึกชื่อ" className="rounded-lg bg-[#A76F71] p-2 text-white disabled:opacity-50">
+                    <Check size={18} />
+                  </button>
+                  <button type="button" disabled={nameSaving} aria-label="ยกเลิก" title="ยกเลิก" onClick={() => { setEditingName(false); setNameError(""); }} className="rounded-lg border border-[#EBD9D1] bg-white p-2 text-[#946B69] disabled:opacity-50">
+                    <X size={18} />
+                  </button>
+                </form>
+              ) : (
+                <div className="flex items-center justify-center gap-2 sm:justify-start">
+                  <h1 className="break-words text-2xl font-extrabold tracking-tight text-[#49332F]">{username}</h1>
+                  <button type="button" aria-label="แก้ไขชื่อผู้ใช้" title="แก้ไขชื่อผู้ใช้" onClick={() => { setNameDraft(username); setNameError(""); setEditingName(true); }} className="rounded-lg p-2 text-[#A76F71] transition hover:bg-[#F8E8E1]">
+                    <Pencil size={17} />
+                  </button>
+                </div>
+              )}
+              {nameError && <p role="alert" className="mt-2 text-xs text-red-600">{nameError}</p>}
 
               <p className="mt-1 break-all text-xs text-[#907772] sm:text-sm">
                 {user?.email || "กำลังโหลดข้อมูล..."}

@@ -5,6 +5,7 @@ import {
   BookOpen,
   Check,
   LockKeyhole,
+  Mail,
   LogOut,
   Moon,
   Sun,
@@ -45,6 +46,22 @@ import {
 
 
 
+const API_BASE_URL = `${(import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "").replace(/\/api$/, "")}/api`;
+
+const mainCategories = [
+  "รักโรแมนติก",
+  "แฟนตาซี",
+  "กำลังภายใน",
+  "สืบสวนสอบสวน",
+  "ระทึกขวัญ/สยองขวัญ",
+  "ไซไฟ/โลกอนาคต",
+  "วาย (Yaoi / BL)",
+  "ยูริ (Yuri / GL)",
+  "พีเรียด/ย้อนยุค",
+  "วรรณกรรม/ชีวิต",
+];
+const MAX_INTERESTS = 5;
+
 const pageInfo = {
   "/settings": ["ตั้งค่า", "จัดการบัญชีและปรับแต่งการใช้งาน"],
   "/settings/reading": [
@@ -57,7 +74,7 @@ const pageInfo = {
     "เลือกรูปแบบการแจ้งเตือนที่ต้องการ",
   ],
   "/settings/profile": ["โปรไฟล์ผู้ใช้", "แก้ไขชื่อผู้ใช้ที่แสดงใน Let's Read"],
-  "/settings/account": ["บัญชีและความปลอดภัย", "เปลี่ยนรหัสผ่านและออกจากระบบ"],
+  "/settings/account": ["บัญชีและความปลอดภัย", "จัดการอีเมล รหัสผ่าน และการออกจากระบบ"],
   "/settings/about": [
     "เกี่ยวกับ Let's Read",
     "ข้อมูลเกี่ยวกับแพลตฟอร์มค้นหาและแนะนำหนังสือ",
@@ -96,6 +113,9 @@ export default function SettingsPage() {
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
   const [profile, setProfile] = useState(null);
+  const [newEmail, setNewEmail] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -134,6 +154,7 @@ export default function SettingsPage() {
         return;
       }
       setUser(data.user ?? null);
+      setPendingEmail(data.user?.new_email || "");
       if (data.user?.id) {
         supabase.from("User")
           .select("User_Name, User_Avatar_URL")
@@ -149,6 +170,30 @@ export default function SettingsPage() {
           data.user?.user_metadata?.full_name ??
           "",
       );
+      // Read saved settings from the authenticated backend, when available.
+      (async () => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          if (!token) return;
+          const response = await fetch(`${API_BASE_URL}/settings/preferences`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!response.ok) return;
+          const settings = await response.json();
+          if (!mounted) return;
+          if (Array.isArray(settings.interests)) {
+            setInterests(settings.interests);
+            localStorage.setItem("letsread-interests", JSON.stringify(settings.interests));
+          }
+          if (settings.notifications && typeof settings.notifications === "object") {
+            setNotifications((previous) => ({ ...previous, ...settings.notifications }));
+            localStorage.setItem("letsread-notifications", JSON.stringify(settings.notifications));
+          }
+        } catch (error) {
+          console.error("[Settings] Load preferences:", error);
+        }
+      })();
     });
     return () => {
       mounted = false;
@@ -178,20 +223,39 @@ export default function SettingsPage() {
     setMessage("");
   };
 
-  const saveReading = () => {
-    if (interests.length === 0)
-      return showMessage("กรุณาเลือกอย่างน้อย 1 หมวด", true);
-    localStorage.setItem("letsread-interests", JSON.stringify(interests));
-    showMessage("บันทึกหมวดหนังสือในเบราว์เซอร์แล้ว");
+  const saveSetting = async (path, payload, storageKey, storageValue, successMessage) => {
+    setSaving(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกการตั้งค่า");
+      const response = await fetch(`${API_BASE_URL}/settings/${path}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || `บันทึกไม่สำเร็จ (${response.status})`);
+      localStorage.setItem(storageKey, JSON.stringify(storageValue));
+      showMessage(successMessage);
+    } catch (error) {
+      showMessage(error.message || "บันทึกไม่สำเร็จ", true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const saveNotifications = () => {
-    localStorage.setItem(
-      "letsread-notifications",
-      JSON.stringify(notifications),
-    );
-    showMessage("บันทึกการตั้งค่าการแจ้งเตือนในเบราว์เซอร์แล้ว");
+  const saveReading = () => {
+    if (interests.length === 0) return showMessage("กรุณาเลือกอย่างน้อย 1 หมวด", true);
+    return saveSetting("reading", { interests }, "letsread-interests", interests, "บันทึกหมวดหนังสือเรียบร้อยแล้ว");
   };
+
+  const saveNotifications = () =>
+    saveSetting("notifications", { notifications }, "letsread-notifications", notifications,
+      "บันทึกการตั้งค่าการแจ้งเตือนเรียบร้อยแล้ว");
 
   const saveProfile = async (event) => {
     event.preventDefault();
@@ -210,6 +274,47 @@ export default function SettingsPage() {
       showMessage(error.message || "บันทึกไม่สำเร็จ", true);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Supabase Auth handles email-change confirmation; do not treat the request as completed.
+  const changeEmail = async (event) => {
+    event.preventDefault();
+    if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
+    const email = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return showMessage("กรุณากรอกอีเมลใหม่ให้ถูกต้อง", true);
+    }
+    if (email === user.email?.toLowerCase()) {
+      return showMessage("อีเมลใหม่ต้องไม่ซ้ำกับอีเมลปัจจุบัน", true);
+    }
+    setEmailSaving(true);
+    try {
+      const { data, error } = await supabase.auth.updateUser({ email });
+      if (error) throw error;
+      setUser(data?.user || user);
+      setPendingEmail(data?.user?.new_email || email);
+      setNewEmail("");
+      showMessage("ส่งคำขอเปลี่ยนอีเมลแล้ว กรุณาตรวจสอบกล่องจดหมายและยืนยันตามลิงก์ (อาจต้องยืนยันทั้งอีเมลเก่าและใหม่)");
+    } catch (error) {
+      showMessage(error.message || "ไม่สามารถส่งคำขอเปลี่ยนอีเมลได้", true);
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const resendEmailConfirmation = async () => {
+    const email = pendingEmail || user?.new_email;
+    if (!email) return showMessage("ยังไม่มีคำขอเปลี่ยนอีเมลที่รอยืนยัน", true);
+    setEmailSaving(true);
+    try {
+      const { error } = await supabase.auth.resend({ type: "email_change", email });
+      if (error) throw error;
+      showMessage("ส่งอีเมลยืนยันอีกครั้งแล้ว กรุณาตรวจสอบกล่องจดหมายและโฟลเดอร์สแปม");
+    } catch (error) {
+      showMessage(error.message || "ส่งอีเมลยืนยันอีกครั้งไม่สำเร็จ", true);
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -314,6 +419,9 @@ export default function SettingsPage() {
         </div>
       )}
 
+      
+
+
       {pathname === "/settings/profile" && (
         <div className="rounded-2xl border border-[#F0E1DA] bg-[#FFF8F5] p-5">
           <h2 className="font-semibold text-[#352923]">โปรไฟล์ผู้ใช้</h2>
@@ -326,7 +434,47 @@ export default function SettingsPage() {
       {pathname === "/settings/account" && (
         
         <div className="space-y-7">
-          
+          <section className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Mail className="size-4 text-[#A36D70]" />
+              <h2 className="font-semibold">ข้อมูลอีเมลและการยืนยัน</h2>
+            </div>
+            <div className="space-y-2">
+              <Label>อีเมลปัจจุบัน</Label>
+              <Input value={user?.email || ""} readOnly className="h-11 rounded-xl bg-[#FFF8F5]" />
+              <p className="text-xs text-muted-foreground">
+                {user?.email_confirmed_at ? "อีเมลปัจจุบันยืนยันแล้ว" : "อีเมลปัจจุบันยังไม่แสดงสถานะยืนยัน"}
+              </p>
+            </div>
+            <form onSubmit={changeEmail} className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="account-new-email">อีเมลใหม่</Label>
+                <Input id="account-new-email" type="email" autoComplete="email"
+                  value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="กรอกอีเมลใหม่" required className="h-11 rounded-xl" />
+              </div>
+              <Button type="submit" disabled={!user || emailSaving}
+                className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto">
+                {emailSaving ? "กำลังดำเนินการ..." : "ส่งคำขอเปลี่ยนอีเมล"}
+              </Button>
+            </form>
+            {(pendingEmail || user?.new_email) && (
+              <div className="space-y-3 rounded-xl border border-[#F0E1DA] bg-[#FFF8F5] p-4">
+                <p className="break-all text-sm text-[#463431]">
+                  อีเมลใหม่ที่รอยืนยัน: <strong>{pendingEmail || user?.new_email}</strong>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  กรุณากดลิงก์ยืนยันจากอีเมลก่อนใช้อีเมลใหม่เข้าสู่ระบบ
+                </p>
+                <Button type="button" variant="outline" disabled={emailSaving || !user}
+                  onClick={resendEmailConfirmation}
+                  className="rounded-xl border-[#B66D57] text-[#A35E49]">
+                  ส่งอีเมลยืนยันอีกครั้ง
+                </Button>
+              </div>
+            )}
+          </section>
+          <Separator />
           <form onSubmit={changePassword} className="space-y-4">
             
             <div className="flex items-center gap-2">
