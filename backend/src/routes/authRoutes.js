@@ -1,3 +1,4 @@
+
 import express from "express";
 import { supabase, supabaseAdmin } from "../config/supabase.js";
 
@@ -114,7 +115,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // เข้าสู่ระบบด้วย Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -127,7 +127,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // เชื่อมบัญชี Auth กับตาราง User
     const userProfile = await getOrCreateUserProfile(data.user);
 
     return res.status(200).json({
@@ -138,7 +137,6 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     console.error("[LOGIN] Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "เกิดข้อผิดพลาดในการเข้าสู่ระบบ",
@@ -168,7 +166,6 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // สมัครสมาชิกผ่าน Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -187,7 +184,6 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // เมื่อ Supabase คืนข้อมูล Auth user มา ให้สร้างโปรไฟล์
     if (data.user) {
       const userProfile = await getOrCreateUserProfile({
         ...data.user,
@@ -215,7 +211,6 @@ router.post("/register", async (req, res) => {
     });
   } catch (error) {
     console.error("[REGISTER] Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "เกิดข้อผิดพลาดในการสมัครสมาชิก",
@@ -232,14 +227,21 @@ router.post("/sync-profile", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
         message: "ไม่พบ Access Token",
       });
     }
 
-    const accessToken = authHeader.split(" ")[1];
+    const accessToken = authHeader.slice("Bearer ".length).trim();
+
+    if (!accessToken) {
+      return res.status(401).json({
+        success: false,
+        message: "ไม่พบ Access Token",
+      });
+    }
 
     const { data: authData, error: authError } =
       await supabase.auth.getUser(accessToken);
@@ -260,14 +262,12 @@ router.post("/sync-profile", async (req, res) => {
     });
   } catch (error) {
     console.error("[SYNC PROFILE] Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "ไม่สามารถซิงก์โปรไฟล์ได้",
       error: error.message,
     });
   }
-
 });
 
 export default router;

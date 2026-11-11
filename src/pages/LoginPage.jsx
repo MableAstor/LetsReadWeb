@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, X } from "lucide-react";
 
 import FacebookIcon from "../assets/facebook-logo.png";
@@ -21,6 +21,16 @@ export default function LoginPage() {
   
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+const requestedPath = location.state?.from;
+
+const redirectPath =
+  typeof requestedPath === "string" &&
+  requestedPath.startsWith("/") &&
+  !requestedPath.startsWith("//")
+    ? requestedPath
+    : "/home";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,9 +49,9 @@ export default function LoginPage() {
 
     try {
       const options = {
-        redirectTo: `${window.location.origin}/home`,
-        skipBrowserRedirect: true,
-      };
+  redirectTo: `${window.location.origin}${redirectPath}`,
+  skipBrowserRedirect: true,
+};
 
       if (provider === "google") {
         options.queryParams = {
@@ -133,7 +143,7 @@ export default function LoginPage() {
       }
 
       alert("เข้าสู่ระบบสำเร็จ");
-      navigate("/home", { replace: true });
+navigate(redirectPath, { replace: true });
     } catch (error) {
       console.error("[Login] Unexpected error:", error);
 

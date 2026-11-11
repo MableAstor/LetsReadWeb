@@ -2,12 +2,18 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+
 import authRoutes from "./routes/authRoutes.js";
 import feedRoutes from "./routes/feedRoutes.js";
 import libraryRoutes from "./routes/libraryRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import homeRoutes from "./routes/homeRoutes.js";
 import rewardRoutes from "./routes/rewardRoutes.js";
+
+import reviewRoutes from "./routes/reviewRoutes.js";
+import sessionRoutes from "./routes/sessionRoutes.js";
+import swipeRoutes from "./routes/swipeRoutes.js";
+
 dotenv.config();
 
 const app = express();
@@ -26,7 +32,6 @@ const allowedOrigins = [
 app.use(
   cors({
     origin(origin, callback) {
-      // อนุญาตคำขอจากเครื่องมือทดสอบ API ที่ไม่มี Origin
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -41,19 +46,38 @@ app.use(
 
 app.use(express.json());
 
+// Authentication
 app.use("/api/auth", authRoutes);
+
+// Routes จาก main
 app.use("/api/auth", feedRoutes);
 app.use("/api/auth", libraryRoutes);
 app.use("/api/auth", leaderboardRoutes);
 app.use("/api/auth", homeRoutes);
 app.use("/api/auth", rewardRoutes);
+
+// Routes จาก RenewDesignshadnc
+
+// Reviews
+app.use("/api/reviews", reviewRoutes);
+
+// Sessions
+app.use("/api/sessions", sessionRoutes);
+
+// Swipe History
+app.use("/api/swipes", swipeRoutes);
+
+// Compatibility alias สำหรับ Frontend เดิม
+app.use("/api/auth/reviews", reviewRoutes);
+
+// Health Check
 app.get("/", (req, res) => {
   res.json({
     message: "Let's Read Backend is running",
   });
 });
 
-// จัดการ Error ที่เกิดใน Middleware หรือ Routes
+// Error Handler
 app.use((error, req, res, next) => {
   console.error("[SERVER] Unhandled error:", error);
 
