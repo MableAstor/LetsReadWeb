@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link} from "react-router-dom";
 import {
   Bell,
   BookOpen,
@@ -9,6 +9,11 @@ import {
   Moon,
   Sun,
   UserRound,
+  ChevronRight,
+  Palette,
+  ShieldCheck,
+  Info,
+  ArrowLeft,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import SettingsLayout from "../components/SettingsLayout";
@@ -38,22 +43,10 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 
-// Must match the categories used by CategoryCard. Keep these labels centralized later.
-const mainCategories = [
-  "รักโรแมนติก",
-  "แฟนตาซี",
-  "กำลังภายใน",
-  "สืบสวนสอบสวน",
-  "ระทึกขวัญ/สยองขวัญ",
-  "ไซไฟ/โลกอนาคต",
-  "วาย (Yaoi / BL)",
-  "ยูริ (Yuri / GL)",
-  "พีเรียด/ย้อนยุค",
-  "วรรณกรรม/ชีวิต",
-];
-const MAX_INTERESTS = 5;
+
 
 const pageInfo = {
+  "/settings": ["ตั้งค่า", "จัดการบัญชีและปรับแต่งการใช้งาน"],
   "/settings/reading": [
     "การตั้งค่าการอ่าน",
     "เลือกหมวดหนังสือที่สนใจ เพื่อเตรียมใช้กับระบบแนะนำ",
@@ -102,6 +95,7 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [username, setUsername] = useState("");
+  const [profile, setProfile] = useState(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -140,6 +134,16 @@ export default function SettingsPage() {
         return;
       }
       setUser(data.user ?? null);
+      if (data.user?.id) {
+        supabase.from("User")
+          .select("User_Name, User_Avatar_URL")
+          .eq("auth_user_id", data.user.id)
+          .maybeSingle()
+          .then(({ data: profileRow, error: profileError }) => {
+            if (profileError) console.error("[Settings] Profile:", profileError);
+            if (mounted) setProfile(profileRow ?? null);
+          });
+      }
       setUsername(
         data.user?.user_metadata?.username ??
           data.user?.user_metadata?.full_name ??
@@ -261,184 +265,70 @@ export default function SettingsPage() {
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
-
-      {pathname === "/settings/reading" && (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold text-[#352923]">
-                หมวดหลักที่สนใจ
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                เลือก 1–5 หมวด ให้ตรงกับหมวดของหน้า Category
-              </p>
-            </div>
-            <Badge variant="secondary" className="rounded-full">
-              {interests.length}/{MAX_INTERESTS}
-            </Badge>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {mainCategories.map((category) => {
-              const selected = interests.includes(category);
-              return (
-                <label
-                  key={category}
-                  className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${selected ? "border-[#C78E88] bg-[#FFF4F0]" : "border-[#F0E1DA] hover:bg-[#FFF9F6]"}`}
-                >
-                  <Checkbox
-                    checked={selected}
-                    onCheckedChange={() => toggleInterest(category)}
-                    aria-label={category}
-                  />
-                  <span className="min-w-0 break-words text-[#463431]">
-                    {category}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          <Button
-            onClick={saveReading}
-            className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto"
+      {(pathname === "/settings" || pathname === "/settings/") && (
+        <div className="space-y-6">
+          <button
+            type="button"
+            onClick={() => navigate("/profile")}
+            className="group flex w-full items-center gap-4 rounded-3xl border border-[#F0E1DA] bg-[#FFF8F5] p-5 text-left shadow-sm transition hover:border-[#D9AAA5] hover:shadow-md sm:p-6"
           >
-            บันทึกการตั้งค่า
-          </Button>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            ตอนนี้บันทึกใน localStorage เท่านั้น ยังไม่อัปเดต User Preference
-            Vector หรือคะแนนแนะนำของ Backend
-          </p>
-        </section>
-      )}
-
-      {pathname === "/settings/appearance" && (
-        <section className="space-y-6">
-          <div className="space-y-3">
-            <Label className="font-semibold">ธีมเว็บไซต์</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#F3D5C9] text-2xl font-bold text-[#865B4D] shadow-sm sm:h-20 sm:w-20">
+              {profile?.User_Avatar_URL ? (
+                <img src={profile.User_Avatar_URL} alt="รูปโปรไฟล์" className="h-full w-full object-cover" />
+              ) : (
+                (profile?.User_Name || username || user?.email || "U").charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-[#A36D70]">โปรไฟล์ของฉัน</p>
+              <h2 className="mt-1 truncate text-lg font-bold text-[#352923] sm:text-xl">
+                {profile?.User_Name || username || "นักอ่าน"}
+              </h2>
+              <p className="mt-1 truncate text-xs text-gray-500 sm:text-sm">
+                {user?.email || "เข้าสู่ระบบเพื่อดูโปรไฟล์"}
+              </p>
+              <p className="mt-2 text-xs font-medium text-[#A36D70]">แตะเพื่อจัดการรูปโปรไฟล์ กรอบรูป และรางวัล</p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-[#A36D70] transition group-hover:translate-x-1" />
+          </button>
+          <div>
+            <h2 className="mb-3 text-base font-bold text-[#352923]">การตั้งค่าของฉัน</h2>
+            <div className="overflow-hidden rounded-2xl border border-[#F0E1DA] bg-white">
               {[
-                { value: "light", label: "สว่าง", Icon: Sun },
-                { value: "dark", label: "มืด", Icon: Moon },
-              ].map(({ value, label, Icon }) => (
-                <Button
-                  key={value}
+                { path: "/settings/account", title: "บัญชีและความปลอดภัย", description: "รหัสผ่านและออกจากระบบ", Icon: ShieldCheck },
+                { path: "/settings/about", title: "เกี่ยวกับ Let's Read", description: "ข้อมูลแอปพลิเคชัน", Icon: Info },
+              ].map(({ path, title, description, Icon }) => (
+                <button
+                  key={path}
                   type="button"
-                  variant="outline"
-                  onClick={() => setTheme(value)}
-                  aria-pressed={theme === value}
-                  className={`h-14 min-w-0 rounded-xl text-sm ${theme === value ? "border-[#B66D57] bg-[#FFF0E9] text-[#925943]" : ""}`}
+                  onClick={() => navigate(path)}
+                  className="flex w-full items-center gap-3 border-b border-[#F5EAE5] p-4 text-left transition last:border-0 hover:bg-[#FFF8F5]"
                 >
-                  <Icon className="size-4" /> {label}{" "}
-                  {theme === value && <Check className="size-4" />}
-                </Button>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FBEAE4] text-[#A36D70]"><Icon className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-[#352923]">{title}</span><span className="mt-1 block text-xs text-gray-500">{description}</span></span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
+                </button>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Dark mode ต้องมี dark: classes ในหน้าอื่น ๆ
-              จึงจะเปลี่ยนทั้งเว็บได้ครบ
-            </p>
           </div>
-          <Separator />
-          <div className="space-y-3">
-            <Label htmlFor="font-size">ขนาดตัวอักษร</Label>
-            <Select value={fontSize} onValueChange={setFontSize}>
-              <SelectTrigger id="font-size" className="w-full max-w-xs">
-                <SelectValue placeholder="เลือกขนาด" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="small">เล็ก</SelectItem>
-                <SelectItem value="normal">ปกติ</SelectItem>
-                <SelectItem value="large">ใหญ่</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              บันทึกขนาดตัวอักษรแล้ว แต่ต้องเชื่อมค่ากับ Layout
-              หลักก่อนจึงจะเปลี่ยนขนาดทั่วเว็บไซต์
-            </p>
-          </div>
-        </section>
-      )}
-
-      {pathname === "/settings/notifications" && (
-        <section className="space-y-3">
-          {[
-            ["reviews", "รีวิวและความคิดเห็น", "กิจกรรมเกี่ยวกับรีวิวหนังสือ"],
-            ["rewards", "รางวัลและ EXP", "ความสำเร็จและรางวัลจากการใช้งาน"],
-            [
-              "recommendations",
-              "หนังสือแนะนำ",
-              "หนังสือที่อาจตรงกับความสนใจของคุณ",
-            ],
-          ].map(([key, label, detail]) => (
-            <SettingRow
-              key={key}
-              icon={Bell}
-              label={label}
-              description={detail}
-            >
-              <Switch
-                checked={Boolean(notifications[key])}
-                onCheckedChange={(checked) =>
-                  setNotifications((prev) => ({ ...prev, [key]: checked }))
-                }
-                aria-label={label}
-              />
-            </SettingRow>
-          ))}
-          <Button
-            onClick={saveNotifications}
-            className="mt-3 w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto"
-          >
-            บันทึกการตั้งค่า
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            บันทึกความต้องการในเบราว์เซอร์เท่านั้น
-            ยังไม่เชื่อมการส่งแจ้งเตือนจริง
-          </p>
-        </section>
+        </div>
       )}
 
       {pathname === "/settings/profile" && (
-        <section className="space-y-5">
-          <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-[#FFF8F5] p-4 sm:p-5">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-[#F3D5C9] text-xl font-bold text-[#865B4D] sm:size-16">
-              {(username || user?.email || "U").charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="break-words font-bold text-[#352923]">
-                {username || "นักอ่าน"}
-              </p>
-              <p className="mt-1 break-all text-xs text-muted-foreground">
-                {user?.email || "ยังไม่พบข้อมูลบัญชี"}
-              </p>
-            </div>
-          </div>
-          <form onSubmit={saveProfile} className="space-y-3">
-            <Label htmlFor="profile-username">ชื่อผู้ใช้</Label>
-            <Input
-              id="profile-username"
-              maxLength={40}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="กรอกชื่อผู้ใช้"
-              className="h-11 rounded-xl"
-            />
-            <p className="text-xs text-muted-foreground">
-              แก้ไขชื่อผู้ใช้ใน Supabase Auth user_metadata
-            </p>
-            <Button
-              type="submit"
-              disabled={saving || !user}
-              className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto"
-            >
-              {saving ? "กำลังบันทึก..." : "บันทึกโปรไฟล์"}
-            </Button>
-          </form>
-        </section>
+        <div className="rounded-2xl border border-[#F0E1DA] bg-[#FFF8F5] p-5">
+          <h2 className="font-semibold text-[#352923]">โปรไฟล์ผู้ใช้</h2>
+          <p className="mt-2 text-sm text-gray-600">จัดการรูปโปรไฟล์ กรอบรูป และรางวัลได้ที่หน้าโปรไฟล์หลัก</p>
+          <Button onClick={() => navigate("/profile")} className="mt-4 rounded-xl bg-[#A36D70] text-white hover:bg-[#8F5C60]">ไปที่โปรไฟล์ของฉัน <ChevronRight className="ml-1 h-4 w-4" /></Button>
+        </div>
       )}
 
+        
       {pathname === "/settings/account" && (
+        
         <div className="space-y-7">
+          
           <form onSubmit={changePassword} className="space-y-4">
+            
             <div className="flex items-center gap-2">
               <LockKeyhole className="size-4 text-[#A36D70]" />
               <h2 className="font-semibold">เปลี่ยนรหัสผ่าน</h2>

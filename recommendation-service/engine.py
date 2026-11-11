@@ -608,7 +608,19 @@ def select_next_book(
         if item[1] >= EXPLORATION_MIN_SCORE and item[1] > 0
     ]
 
-    if exact_scored:
+    # Epsilon-greedy: choose an eligible cross-category book on 20% of
+    # requests. Keep the session-first ranking within exploitation.
+    # If one arm has no candidates, fall back to the other arm.
+    draw = random.random() if random_value is None else float(random_value)
+    if not 0.0 <= draw < 1.0:
+        raise ValueError("random_value must be in [0, 1)")
+    explore_draw = draw < EXPLORATION_RATE
+
+    if explore_draw and guided_exploration:
+        selected_group = guided_exploration
+        source = "exploration"
+        reason = "ลองหนังสือต่างหมวดที่มีความเกี่ยวข้องกับความสนใจของคุณ"
+    elif exact_scored:
         selected_group = exact_scored
         source = "session_main_and_sub"
         reason = "ตรงหมวดหลักและหมวดรองที่เลือกใน Session ปัจจุบัน"
@@ -631,11 +643,10 @@ def select_next_book(
                 "primary_candidate_count": 0,
                 "outside_candidate_count": len(outside_scored),
                 "guided_exploration_count": 0,
+                "exploration_draw": round(draw, 6),
             },
         }
 
-    # Keep relevance ranking and diversity penalty; exploration is only
-    # used after the selected categories are exhausted.
     selection_pool = selected_group
 
     selected = selection_pool[0]
@@ -653,6 +664,8 @@ def select_next_book(
             preference_count,
         ) | {
             "selection_mode": source,
+            "exploration_draw": round(draw, 6),
+            "exploration_selected": source.startswith("exploration"),
             "profile_source": profile_source,
             "selected_score": result_book["score"],
             "preference_score": result_book["preferenceScore"],

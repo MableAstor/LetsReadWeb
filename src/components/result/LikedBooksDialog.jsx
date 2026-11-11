@@ -1,3 +1,5 @@
+import { Bookmark, Check, LoaderCircle } from "lucide-react";
+import { getBookIdForLibrary } from "../../services/librarySaveService";
 
 import { useEffect } from "react";
 import { X, Heart } from "lucide-react";
@@ -12,7 +14,7 @@ const getBookImage = (book) =>
   book?.image_url ||
   "";
 
-export default function LikedBooksDialog({ open, onClose, books = [] }) {
+export default function LikedBooksDialog({ open, onClose, books = [], onSave, savedShelves = {}, savingBookId = null }) {
   useEffect(() => {
     if (!open) return;
 
@@ -111,6 +113,23 @@ export default function LikedBooksDialog({ open, onClose, books = [] }) {
                       >
                         {title}
                       </h3>
+                      {onSave && (
+                        <div className="mt-3 space-y-2">
+                          <button type="button"
+                            disabled={!getBookIdForLibrary(book) || savingBookId !== null}
+                            onClick={() => onSave(book, "Want to Read")}
+                            className="flex w-full items-center justify-center gap-1 rounded-full bg-[#a87970] px-2 py-2 text-xs text-white disabled:opacity-50">
+                            {savingBookId === getBookIdForLibrary(book) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : savedShelves[String(getBookIdForLibrary(book))] === "Want to Read" ? <Check className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                            {savedShelves[String(getBookIdForLibrary(book))] === "Want to Read" ? "Saved" : "Want to Read"}
+                          </button>
+                          <button type="button"
+                            disabled={!getBookIdForLibrary(book) || savingBookId !== null}
+                            onClick={() => onSave(book, "Want to Buy")}
+                            className="w-full rounded-full border border-[#e6d9cf] px-2 py-1.5 text-[11px] text-[#74675e] disabled:opacity-50">
+                            {savedShelves[String(getBookIdForLibrary(book))] === "Want to Buy" ? "✓ Want to Buy" : "Want to Buy"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </article>
                 );

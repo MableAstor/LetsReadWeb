@@ -1,8 +1,7 @@
 
 import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
-import { Button } from "./ui/button";
 import {
   Card,
   CardContent,
@@ -16,7 +15,9 @@ export default function SettingsLayout({
   description,
   children,
 }) {
-  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const isSubPage = pathname.startsWith("/settings/");
 
   return (
     <main
@@ -28,22 +29,27 @@ export default function SettingsLayout({
         lg:px-8 lg:pb-10
       "
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate("/profile")}
-        className="
-          mb-4 h-9 rounded-xl
-          px-2 text-xs
-          text-muted-foreground
-          hover:text-foreground
-          sm:text-sm
-        "
-      >
-        <ArrowLeft className="h-4 w-4" />
-        กลับไปหน้า Profile
-      </Button>
+      {/* ปุ่มกลับ เฉพาะหน้าตั้งค่าย่อย */}
+      {isSubPage && (
+        <div className="mb-4">
+          <Link
+            to="/settings"
+            aria-label="กลับไปหน้าตั้งค่า"
+            title="กลับไปหน้าตั้งค่า"
+            className="
+              inline-flex h-10 w-10 items-center justify-center
+              rounded-full border border-[#EEDCD3]
+              bg-white/80 text-[#946B69]
+              shadow-sm backdrop-blur-sm
+              transition-all duration-200
+              hover:bg-white hover:shadow-md
+              active:scale-95
+            "
+          >
+            <ArrowLeft size={19} strokeWidth={1.8} />
+          </Link>
+        </div>
+      )}
 
       <Card
         className="
@@ -55,23 +61,12 @@ export default function SettingsLayout({
         "
       >
         <CardHeader className="px-4 pt-5 pb-3 sm:px-6 sm:pt-6">
-          <CardTitle
-            className="
-              text-lg font-bold
-              text-[#352923]
-              sm:text-xl
-            "
-          >
+          <CardTitle className="text-lg font-bold text-[#352923] sm:text-xl">
             {title}
           </CardTitle>
 
           {description && (
-            <CardDescription
-              className="
-                mt-1 text-xs leading-relaxed
-                text-gray-500 sm:text-sm
-              "
-            >
+            <CardDescription className="mt-1 text-xs leading-relaxed text-gray-500 sm:text-sm">
               {description}
             </CardDescription>
           )}

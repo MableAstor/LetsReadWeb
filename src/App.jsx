@@ -82,6 +82,7 @@ export default function App() {
             <Route path="/top-100" element={<Top100Page />} />
 
             {/* หน้า Settings เปิดดูได้ แต่การบันทึกค่าต้อง Login */}
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/reading" element={<SettingsPage />} />
             <Route path="/settings/appearance" element={<SettingsPage />} />
             <Route path="/settings/notifications" element={<SettingsPage />} />

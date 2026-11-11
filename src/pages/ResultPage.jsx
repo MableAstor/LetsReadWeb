@@ -1,6 +1,8 @@
 
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { getLibraryShelves, saveBookToLibrary, getBookIdForLibrary } from "../services/librarySaveService";
 
 import { rebuildPreferences } from "../services/swipeService";
 import { getFinalRecommendations } from "../services/recommendationService";
@@ -74,6 +76,8 @@ export default function Result() {
     ? routeState.selectedSubcategories
     : [];
 
+  const [savedShelves, setSavedShelves] = useState({});
+  const [savingBookId, setSavingBookId] = useState(null);
   const [resultData, setResultData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -153,8 +157,34 @@ export default function Result() {
     selectedSubcategories,
   ]);
 
+  useEffect(() => {
+    let active = true;
+    getLibraryShelves()
+      .then((shelves) => {
+        if (!active) return;
+        setSavedShelves(Object.fromEntries(shelves.map((shelf) => [String(shelf.BooksID), shelf.Shelve_Type])));
+      })
+      .catch((err) => console.warn("[Library] Could not load shelves:", err));
+    return () => { active = false; };
+  }, []);
+
+  const handleSaveBook = async (book, shelfType = "Want to Read") => {
+    const bookId = getBookIdForLibrary(book);
+    if (!bookId || savingBookId !== null) return;
+    setSavingBookId(bookId);
+    try {
+      await saveBookToLibrary(book, shelfType);
+      setSavedShelves((previous) => ({ ...previous, [String(bookId)]: shelfType }));
+      toast.success(`บันทึกลง ${shelfType} แล้ว`);
+    } catch (err) {
+      toast.error(err.message || "บันทึกหนังสือไม่สำเร็จ");
+    } finally {
+      setSavingBookId(null);
+    }
+  };
+
   const handleRestart = () => {
-    navigate("/category", {
+    navigate("/swipe", {
       replace: true,
     });
   };
@@ -410,6 +440,9 @@ export default function Result() {
           setShowLikedBooks(false)
         }
         books={likedBooks}
+        onSave={handleSaveBook}
+        savedShelves={savedShelves}
+        savingBookId={savingBookId}
       />
     </main>
   );

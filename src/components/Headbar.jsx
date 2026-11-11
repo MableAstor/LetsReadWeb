@@ -85,7 +85,6 @@ export const Headbar = () => {
     { label: "Leaderboard", icon: Trophy, path: "/leaderboard" },
     { label: "Swipe", icon: Layers3, path: "/swipe" },
     { label: "Library", icon: LibraryBig, path: "/library" },
-    { label: "Profile", icon: UserRound, path: "/profile" },
   ];
 
   return (

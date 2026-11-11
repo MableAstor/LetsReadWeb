@@ -9,9 +9,10 @@ import WanttoRead from "../components/Wanttoread.jsx";
 import Savebookfrom from "../components/Savebookfrom";
 
 import {
-  viralBooks,
-  savedBooks,
-} from "../data/books";
+  getLibraryShelves,
+  saveBookToLibrary,
+  removeBookFromLibrary,
+} from "../services/librarySaveService";
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -27,7 +28,7 @@ const API_URL = (
 // เหลือเพียง Saved Books และ Want to Read
 // ======================================================
 const initialLibrary = {
-  wantToRead: [...viralBooks],
+  wantToRead: [],
   savedBooks: [],
 };
 
@@ -50,6 +51,9 @@ export default function LibraryPage() {
 
   const [savedLoading, setSavedLoading] = useState(true);
   const [savedError, setSavedError] = useState("");
+  const [shelfLoading, setShelfLoading] = useState(true);
+  const [shelfError, setShelfError] = useState("");
+  const [busyBookId, setBusyBookId] = useState(null);
 
   // ======================================================
   // โหลด Saved Books จาก Backend
@@ -167,6 +171,62 @@ export default function LibraryPage() {
     loadSavedBooks();
   }, [loadSavedBooks]);
 
+  // โหลดหนังสือที่ Save จากหน้า Result ในชั้น Want to Read
+  const loadWantToRead = useCallback(async () => {
+    setShelfLoading(true);
+    setShelfError("");
+    try {
+      const shelves = await getLibraryShelves();
+      const books = shelves
+        .filter((shelf) => shelf.Shelve_Type === "Want to Read" && shelf.Book)
+        .map((shelf) => ({
+          ...shelf.Book,
+          id: shelf.BooksID,
+          BooksID: shelf.BooksID,
+          title: shelf.Book.Books_title || "ไม่ระบุชื่อหนังสือ",
+          cover: shelf.Book.Books_Cover || "",
+          image: shelf.Book.Books_Cover || "",
+          imageUrl: shelf.Book.Books_Cover || "",
+          description: shelf.Book.Book_Synopsis || "",
+        }));
+      setLibrary((prev) => ({ ...prev, wantToRead: books }));
+    } catch (error) {
+      setShelfError(error.message || "โหลด Want to Read ไม่สำเร็จ");
+    } finally {
+      setShelfLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWantToRead();
+  }, [loadWantToRead]);
+
+  // โหลดข้อมูลใหม่ทุกครั้งที่กลับมาที่หน้า Library (เช่น หลัง Save จาก Result)
+  useEffect(() => {
+    const onFocus = () => {
+      loadWantToRead();
+      loadSavedBooks();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [loadWantToRead, loadSavedBooks]);
+
+  const moveToWantToBuy = async (book) => {
+    if (busyBookId !== null) return;
+    setBusyBookId(book.id);
+    try {
+      await saveBookToLibrary(book, "Want to Buy");
+      setLibrary((prev) => ({
+        ...prev,
+        wantToRead: prev.wantToRead.filter((item) => String(item.id) !== String(book.id)),
+      }));
+    } catch (error) {
+      window.alert(error.message || "ย้ายหนังสือไม่สำเร็จ");
+    } finally {
+      setBusyBookId(null);
+    }
+  };
+
   // ======================================================
   // ตรวจสอบว่าเป็นรีวิวที่มาจากระบบ Save หรือไม่
   // ======================================================
@@ -232,7 +292,7 @@ export default function LibraryPage() {
         book
       );
 
-      window.alert("ไม่พบข้อมูลรีวิวที่ต้องการลบ");
+      window.alert("ไม่พบ ID ของรายการที่ต้องการลบ");
       return;
     }
 
@@ -252,9 +312,11 @@ export default function LibraryPage() {
     }));
 
     try {
-      // ยกเลิก Save ในฐานข้อมูลเมื่ออยู่ใน Saved Books
+      // ลบหนังสือจาก Supabase จริง ไม่ใช่ลบเฉพาะบนหน้าจอ
       if (listName === "savedBooks") {
         await unsaveReviewOnServer(book);
+      } else if (listName === "wantToRead") {
+        await removeBookFromLibrary(book, "Want to Read");
       }
 
       console.log(
@@ -369,6 +431,15 @@ export default function LibraryPage() {
             Try again
           </Button>
         </div>
+      ) : activeTab === "wantToRead" && shelfLoading ? (
+        <div className="flex min-h-60 items-center justify-center rounded-2xl border border-dashed bg-white/70 p-6">
+          <p className="text-sm text-muted-foreground">กำลังโหลด Want to Read...</p>
+        </div>
+      ) : activeTab === "wantToRead" && shelfError ? (
+        <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
+          <p className="text-sm text-red-600">{shelfError}</p>
+          <Button type="button" variant="outline" onClick={loadWantToRead}>Try again</Button>
+        </div>
       ) : currentItems.length === 0 ? (
         <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
           <BookOpen className="h-9 w-9 text-muted-foreground" />
@@ -407,9 +478,10 @@ export default function LibraryPage() {
                 key={book.id}
                 book={book}
                 onMarkAsRead={markAsRead}
-                onRemove={(book) =>
-                  removeBook("wantToRead", book)
-                }
+                onMoveToWantToBuy={moveToWantToBuy}
+                onRemove={(book) => {
+                  if (busyBookId === null) removeBook("wantToRead", book);
+                }}
               />
             ))}
         </div>

@@ -1,3 +1,5 @@
+import { Bookmark, Check, LoaderCircle } from "lucide-react";
+import { getBookIdForLibrary } from "../../services/librarySaveService";
 
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -37,7 +39,7 @@ const getBookSubcategory = (book) => {
   )];
 };
 
-export default function ResultBookCard({ book, rank, showDetails = true }) {
+export default function ResultBookCard({ book, rank, showDetails = true, onSave, savedShelf, saving = false }) {
   const title = getBookTitle(book);
   const image = getBookImage(book);
   const category = getBookCategory(book);
@@ -108,6 +110,17 @@ const subcategory = getBookSubcategory(book);
               </p>
             )}
           </>
+        )}
+        {onSave && (
+          <div className="space-y-1 pt-2">
+            <button type="button" disabled={saving || !getBookIdForLibrary(book)}
+              onClick={() => onSave(book, "Want to Read")}
+              className="flex w-full items-center justify-center gap-1 rounded-full bg-[#a87970] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+              {saving ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : savedShelf === "Want to Read" ? <Check className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+              {savedShelf === "Want to Read" ? "Saved · Want to Read" : "Save to Library"}
+            </button>
+            {savedShelf && <p className="text-center text-[10px] text-[#99877b]">อยู่ในชั้น {savedShelf}</p>}
+          </div>
         )}
       </CardContent>
     </Card>
