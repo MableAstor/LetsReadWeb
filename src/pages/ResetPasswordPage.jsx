@@ -21,17 +21,16 @@ export default function ResetPasswordPage() {
     let active = true;
 
     const checkSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (!active) return;
-
-      if (error || !data.session) {
-        setValidSession(false);
-      } else {
-        setValidSession(true);
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!active) return;
+        setValidSession(!error && Boolean(data?.session));
+      } catch (error) {
+        console.error("[Reset password] Session check error:", error);
+        if (active) setValidSession(false);
+      } finally {
+        if (active) setCheckingSession(false);
       }
-
-      setCheckingSession(false);
     };
 
     checkSession();

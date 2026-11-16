@@ -23,14 +23,22 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-const requestedPath = location.state?.from;
+  const requestedPath = location.state?.from;
+  const requestedUrl =
+    typeof requestedPath === "string"
+      ? requestedPath
+      : requestedPath?.pathname
+        ? `${requestedPath.pathname}${requestedPath.search || ""}${requestedPath.hash || ""}`
+        : null;
 
-const redirectPath =
-  typeof requestedPath === "string" &&
-  requestedPath.startsWith("/") &&
-  !requestedPath.startsWith("//")
-    ? requestedPath
-    : "/home";
+  const redirectPath =
+    typeof requestedUrl === "string" &&
+    requestedUrl.startsWith("/") &&
+    !requestedUrl.startsWith("//") &&
+    !requestedUrl.startsWith("/\\") &&
+    !/^\/(login|signin|forgotpass|reset-password)([/?#]|$)/i.test(requestedUrl)
+      ? requestedUrl
+      : "/home";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -254,7 +262,7 @@ navigate(redirectPath, { replace: true });
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs sm:text-sm">
                 <button
                   type="button"
-                  onClick={() => navigate("/Signin")}
+                  onClick={() => navigate("/Signin", { state: { from: redirectPath } })}
                   className="font-semibold text-gray-800 hover:underline"
                 >
                   Create Account

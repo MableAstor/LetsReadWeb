@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Eye, EyeOff, X } from "lucide-react";
 
 import FacebookIcon from "../assets/facebook-logo.png";
@@ -21,6 +21,18 @@ const API_URL = (
 
 export default function SignInPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from;
+  const requestedUrl = typeof from === "string"
+    ? from
+    : from?.pathname
+      ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+      : null;
+  const redirectPath = typeof requestedUrl === "string" &&
+    requestedUrl.startsWith("/") && !requestedUrl.startsWith("//") &&
+    !requestedUrl.startsWith("/\\") &&
+    !/^\/(login|signin|forgotpass|reset-password)([/?#]|$)/i.test(requestedUrl)
+      ? requestedUrl : "/home";
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] =
@@ -83,7 +95,7 @@ export default function SignInPage() {
         if (error) throw error;
 
         alert("สมัครสมาชิกสำเร็จ");
-        navigate("/home");
+        navigate(redirectPath, { replace: true });
       } else {
         alert(
           result.message ||
@@ -110,7 +122,7 @@ export default function SignInPage() {
         await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: `${window.location.origin}/home`,
+            redirectTo: `${window.location.origin}${redirectPath}`,
             skipBrowserRedirect: true,
           },
         });
