@@ -82,7 +82,7 @@ router.get("/reviews/test", async (req, res) => {
       const result = await supabaseAdmin
         .from("User")
         .select(
-          "UserID, User_Name, User_Avatar_URL, Active_Frame_RewardsID"
+          "UserID, User_Name, User_Avatar_URL, Active_Frame_RewardsID, Active_Title_RewardsID"
         )
         .in("UserID", userIds);
 
@@ -97,6 +97,51 @@ router.get("/reviews/test", async (req, res) => {
         user,
       ])
     );
+
+    // Resolve active title rewards, only when the author actually owns them.
+    const activeTitleRewardIds = [...new Set(users
+      .map((user) => user.Active_Title_RewardsID)
+      .filter((id) => id != null))];
+    const titleRewardMap = new Map();
+    const ownedTitleKeys = new Set();
+
+    if (activeTitleRewardIds.length) {
+      const { data: titleRewards, error: titleError } = await supabaseAdmin
+        .from("Rewards")
+        .select("RewardsID, Rewards_Name")
+        .in("RewardsID", activeTitleRewardIds);
+      if (titleError) throw titleError;
+      for (const reward of titleRewards || []) {
+        if (/^TITLE_TOP_[123]_(OCT|NOV|DEC)_2026$/.test(reward.Rewards_Name)) {
+          titleRewardMap.set(String(reward.RewardsID), reward.Rewards_Name);
+        }
+      }
+
+      const { data: ownedTitles, error: ownedError } = await supabaseAdmin
+        .from("User_Rewards")
+        .select("UserID, RewardsID")
+        .in("UserID", userIds)
+        .in("RewardsID", activeTitleRewardIds);
+      if (ownedError) throw ownedError;
+      for (const owned of ownedTitles || []) {
+        ownedTitleKeys.add(`${owned.UserID}:${owned.RewardsID}`);
+      }
+    }
+
+    const getActiveTitle = (user) => {
+      const rewardId = user?.Active_Title_RewardsID;
+      if (rewardId == null || !ownedTitleKeys.has(`${user.UserID}:${rewardId}`)) return null;
+      const rewardName = titleRewardMap.get(String(rewardId));
+      if (!rewardName) return null;
+      const match = rewardName.match(/^TITLE_TOP_([123])_(OCT|NOV|DEC)_(2026)$/);
+      if (!match) return null;
+      const rank = Number(match[1]);
+      return {
+        id: `TOP_${rank}_${match[2]}_${match[3]}`,
+        name: ["ราชานักรีวิว", "ยอดนักรีวิว", "ดาวรุ่งนักรีวิว"][rank - 1],
+        color: ["gold", "silver", "bronze"][rank - 1],
+      };
+    };
 
     const reviewIds = reviews.map(
       (review) => review.ReviewsID
@@ -210,6 +255,7 @@ router.get("/reviews/test", async (req, res) => {
           reviewUser?.User_Avatar_URL || null,
         Active_Frame_RewardsID:
           reviewUser?.Active_Frame_RewardsID ?? null,
+        Active_Title: getActiveTitle(reviewUser),
         Like_Count:
           likeCountMap.get(reviewKey) || 0,
         Liked_By_Me:

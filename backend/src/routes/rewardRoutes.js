@@ -728,6 +728,105 @@ async function checkAndGrantFrames(userId, counts) {
   };
 }
 
+
+// Title tags are catalogued as Rewards and owned permanently in User_Rewards.
+// Do not award a monthly rank to users with zero reviews.
+const titleDefinitions = [
+  ...[1, 2, 3].map((rank) => ({
+    id: `TOP_${rank}_OCT_2026`,
+    name: `TITLE_TOP_${rank}_OCT_2026`,
+    title: ["ราชานักรีวิว", "ยอดนักรีวิว", "ดาวรุ่งนักรีวิว"][rank - 1],
+    description: `อันดับ ${rank} เดือนตุลาคม 2026`,
+    requirement: `จบเดือนตุลาคมด้วยอันดับ ${rank}`,
+    color: ["gold", "silver", "bronze"][rank - 1],
+    year: 2026, month: 10, rank,
+  })),
+  ...[11, 12].flatMap((month) => [1, 2, 3].map((rank) => ({
+    id: `TOP_${rank}_${month === 11 ? "NOV" : "DEC"}_2026`,
+    name: `TITLE_TOP_${rank}_${month === 11 ? "NOV" : "DEC"}_2026`,
+    title: ["ราชานักรีวิว", "ยอดนักรีวิว", "ดาวรุ่ง นักรีวิว"][rank - 1].replace("ดาวรุ่ง นัก", "ดาวรุ่งนัก"),
+    description: `อันดับ ${rank} เดือน${month === 11 ? "พฤศจิกายน" : "ธันวาคม"} 2026`,
+    requirement: `จบเดือนด้วยอันดับ ${rank}`,
+    color: ["gold", "silver", "bronze"][rank - 1],
+    year: 2026, month, rank,
+  }))),
+];
+
+async function checkAndGrantTitles(userId) {
+  const names = titleDefinitions.map((item) => item.name);
+  const { data: catalog, error: catalogError } = await supabaseAdmin
+    .from("Rewards").select("RewardsID, Rewards_Name").in("Rewards_Name", names);
+  if (catalogError) throw catalogError;
+  const byName = new Map((catalog || []).map((r) => [r.Rewards_Name, r.RewardsID]));
+  const missing = names.filter((name) => !byName.has(name));
+  if (missing.length) throw new Error(`กรุณาเพิ่มแท็กใน Rewards ก่อน: ${missing.join(", ")}`);
+
+  const { data: earned, error: earnedError } = await supabaseAdmin
+    .from("User_Rewards").select("RewardsID").eq("UserID", userId);
+  if (earnedError) throw earnedError;
+  const earnedIds = new Set((earned || []).map((r) => String(r.RewardsID)));
+  const cache = new Map();
+  const newlyUnlockedTitles = [];
+  for (const title of titleDefinitions) {
+    const rewardId = byName.get(title.name);
+    if (earnedIds.has(String(rewardId)) || !isMonthFinished(title.year, title.month)) continue;
+    const key = `${title.year}-${title.month}`;
+    if (!cache.has(key)) cache.set(key, await getMonthlyReviewRanking(title.year, title.month));
+    const winner = cache.get(key).find((u) => u.rank === title.rank && u.reviews > 0);
+    if (winner && String(winner.UserID) === String(userId)) {
+      const result = await grantReward(userId, rewardId);
+      earnedIds.add(String(rewardId));
+      if (result.inserted) newlyUnlockedTitles.push(title.id);
+    }
+  }
+  const { data: user, error: userError } = await supabaseAdmin
+    .from("User").select("Active_Title_RewardsID").eq("UserID", userId).single();
+  if (userError) throw userError;
+  const activeId = user.Active_Title_RewardsID;
+  return {
+    titles: titleDefinitions.map((title) => ({
+      id: title.id, name: title.title, description: title.description,
+      requirement: title.requirement, color: title.color,
+      unlocked: earnedIds.has(String(byName.get(title.name))),
+    })),
+    activeTitleId: titleDefinitions.find((t) =>
+      String(byName.get(t.name)) === String(activeId) && earnedIds.has(String(activeId))
+    )?.id || null,
+    newlyUnlockedTitles,
+  };
+}
+
+// Changing the active title does not remove any earned rewards.
+router.put("/rewards/active-title", async (req, res) => {
+  try {
+    const profile = await getRewardUser(req);
+    const id = req.body?.titleId;
+    if (id !== null && (typeof id !== "string" || !titleDefinitions.some((t) => t.id === id))) {
+      return res.status(400).json({ success: false, message: "แท็กไม่ถูกต้อง" });
+    }
+    const title = titleDefinitions.find((t) => t.id === id);
+    let rewardId = null;
+    if (title) {
+      const { data: catalog, error: catalogError } = await supabaseAdmin
+        .from("Rewards").select("RewardsID").eq("Rewards_Name", title.name).single();
+      if (catalogError) throw catalogError;
+      rewardId = catalog.RewardsID;
+      const { data: owned, error: ownedError } = await supabaseAdmin
+        .from("User_Rewards").select("RewardsID")
+        .eq("UserID", profile.UserID).eq("RewardsID", rewardId).maybeSingle();
+      if (ownedError) throw ownedError;
+      if (!owned) return res.status(403).json({ success: false, message: "ยังไม่ได้รับแท็กนี้" });
+    }
+    const { error } = await supabaseAdmin.from("User")
+      .update({ Active_Title_RewardsID: rewardId }).eq("UserID", profile.UserID);
+    if (error) throw error;
+    return res.json({ success: true, activeTitleId: title?.id || null });
+  } catch (error) {
+    console.error("[TITLES] Save:", error);
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
 // ======================================================
 // ตรวจสอบทั้ง Rewards และ Profile Frames
 // ======================================================
@@ -742,7 +841,10 @@ async function checkAllUnlocks(userProfile) {
     rewardResult.counts
   );
 
+  const titleResult = await checkAndGrantTitles(userProfile.UserID);
+
   return {
+    ...titleResult,
     counts: rewardResult.counts,
     rewards: rewardResult.rewards,
     newlyUnlocked: rewardResult.newlyUnlocked,
@@ -757,6 +859,8 @@ async function checkAllUnlocks(userProfile) {
 // ======================================================
 
 router.get("/rewards", async (req, res) => {
+  console.log("🟢 NEW TITLE REWARDS ROUTE CALLED");
+
   try {
     const userProfile = await getRewardUser(req);
 
@@ -769,6 +873,9 @@ router.get("/rewards", async (req, res) => {
       newlyUnlocked: result.newlyUnlocked,
       frames: result.frames,
       newlyUnlockedFrames: result.newlyUnlockedFrames,
+      titles: result.titles,
+      activeTitleId: result.activeTitleId,
+      newlyUnlockedTitles: result.newlyUnlockedTitles,
     });
   } catch (error) {
     console.error("[REWARDS] Fetch error:", error);
@@ -798,6 +905,9 @@ router.post("/rewards/check", async (req, res) => {
       newlyUnlocked: result.newlyUnlocked,
       frames: result.frames,
       newlyUnlockedFrames: result.newlyUnlockedFrames,
+      titles: result.titles,
+      activeTitleId: result.activeTitleId,
+      newlyUnlockedTitles: result.newlyUnlockedTitles,
     });
   } catch (error) {
     console.error("[REWARDS CHECK] Error:", error);
