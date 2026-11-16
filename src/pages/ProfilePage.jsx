@@ -33,6 +33,26 @@ const API_URL =
   (import.meta.env.VITE_API_URL || "http://localhost:5000")
     .replace(/\/+$/, "") + "/api/auth";
 
+import firstLogin from "../assets/pink-cloud-circle-frame-2026.png";
+import reviewFive from "../assets/red-fire-abstract-frame.png";
+import toponeNOV from "../assets/blue-and-orange-fish-frame.png";
+import toptwoNOV from "../assets/cute-bunnies-hug-frame.png";
+import topthreeNOV from "../assets/running-dogs-and-paws-frame.png";
+import toponeDEC from "../assets/red-cat-yarn-frame.png.png";
+import toptwoDEC from "../assets/green-leaves-and-blue-clouds-frame.png";
+import topthreeDEC from "../assets/golden-thorn-vines-frame.png";
+
+const FRAME_IMAGES = {
+  1: firstLogin,
+  2: reviewFive,
+  3: toponeNOV,
+  4: toptwoNOV,
+  5: topthreeNOV,
+  6: toponeDEC,
+  7: toptwoDEC,
+  8: topthreeDEC,
+};
+
 const rewardItems = [
   {
     code: "FIRST_SHELF",
@@ -234,7 +254,7 @@ export default function ProfilePage() {
         const { data: profile, error: profileError } =
           await supabase
             .from("User")
-            .select("UserID, User_Name, User_Avatar_URL")
+            .select("UserID, User_Name, User_Avatar_URL, Active_Frame_RewardsID")
             .eq("auth_user_id", authUser.id)
             .maybeSingle();
 
@@ -431,6 +451,7 @@ export default function ProfilePage() {
     "นักอ่าน";
 
   const avatarUrl = profileData?.User_Avatar_URL || null;
+  const frameImage = FRAME_IMAGES[Number(profileData?.Active_Frame_RewardsID)] || null;
 
   // รางวัลที่ปลดล็อกจริงเท่านั้น
   const unlockedRewards = useMemo(() => {
@@ -558,6 +579,8 @@ export default function ProfilePage() {
               <UserAvatar
                 avatarUrl={avatarUrl}
                 userName={username}
+                frameImage={frameImage}
+                frameScale={1.3}
                 size={100}
               />
             </div>

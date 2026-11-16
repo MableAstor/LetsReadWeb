@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import WanttoRead from "./Wanttoread";
 import {
   getLibraryShelves,
-  saveBookToLibrary,
   removeBookFromLibrary,
 } from "../services/librarySaveService";
 
@@ -19,7 +18,7 @@ const toCardBook = (shelf) => ({
   description: shelf.Book?.Book_Synopsis || "",
 });
 
-export default function WantToReadShelf({ refreshKey = 0, onMarkAsRead }) {
+export default function WantToReadShelf({ refreshKey = 0 }) {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,16 +39,11 @@ export default function WantToReadShelf({ refreshKey = 0, onMarkAsRead }) {
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
-  const update = async (book, action) => {
+  const remove = async (book) => {
     setBusyId(book.BooksID);
     try {
-      if (action === "move") {
-        await saveBookToLibrary(book, "Want to Buy");
-        toast.success("ย้ายไป Want to Buy แล้ว");
-      } else {
-        await removeBookFromLibrary(book, "Want to Read");
-        toast.success("นำหนังสือออกจาก Library แล้ว");
-      }
+      await removeBookFromLibrary(book, "Want to Read");
+      toast.success("นำหนังสือออกจาก Library แล้ว");
       setBooks((previous) => previous.filter((item) => item.BooksID !== book.BooksID));
     } catch (err) {
       toast.error(err.message || "ดำเนินการไม่สำเร็จ");
@@ -68,9 +62,7 @@ export default function WantToReadShelf({ refreshKey = 0, onMarkAsRead }) {
         <div key={book.BooksID} className={busyId === book.BooksID ? "pointer-events-none opacity-60" : ""}>
           <WanttoRead
             book={book}
-            onMoveToWantToBuy={() => update(book, "move")}
-            onRemove={() => update(book, "remove")}
-            onMarkAsRead={onMarkAsRead}
+            onRemove={() => remove(book)}
           />
         </div>
       ))}

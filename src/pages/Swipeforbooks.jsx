@@ -414,9 +414,19 @@ export default function Swipeforbooks() {
       }
 
       // STEP 2: โหลด Preference หากยังไม่มี
-      if (!Array.isArray(pending.preferences)) {
-        pending.preferences = await rebuildPreferences();
-      }
+      
+if (!Array.isArray(pending.preferences)) {
+  const preferenceResponse = await rebuildPreferences();
+
+  if (!Array.isArray(preferenceResponse?.preferences)) {
+    throw new Error(
+      "Backend ไม่ส่ง User_Preferences เป็น Array"
+    );
+  }
+
+  pending.preferences = preferenceResponse.preferences;
+}
+
 
       const recommendStart = performance.now();
 

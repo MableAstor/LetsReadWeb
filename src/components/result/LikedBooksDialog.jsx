@@ -113,23 +113,30 @@ export default function LikedBooksDialog({ open, onClose, books = [], onSave, sa
                       >
                         {title}
                       </h3>
-                      {onSave && (
-                        <div className="mt-3 space-y-2">
-                          <button type="button"
-                            disabled={!getBookIdForLibrary(book) || savingBookId !== null}
-                            onClick={() => onSave(book, "Want to Read")}
-                            className="flex w-full items-center justify-center gap-1 rounded-full bg-[#a87970] px-2 py-2 text-xs text-white disabled:opacity-50">
-                            {savingBookId === getBookIdForLibrary(book) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : savedShelves[String(getBookIdForLibrary(book))] === "Want to Read" ? <Check className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
-                            {savedShelves[String(getBookIdForLibrary(book))] === "Want to Read" ? "Saved" : "Want to Read"}
-                          </button>
-                          <button type="button"
-                            disabled={!getBookIdForLibrary(book) || savingBookId !== null}
-                            onClick={() => onSave(book, "Want to Buy")}
-                            className="w-full rounded-full border border-[#e6d9cf] px-2 py-1.5 text-[11px] text-[#74675e] disabled:opacity-50">
-                            {savedShelves[String(getBookIdForLibrary(book))] === "Want to Buy" ? "✓ Want to Buy" : "Want to Buy"}
-                          </button>
-                        </div>
-                      )}
+                      {onSave && (() => {
+                        const bookId = getBookIdForLibrary(book);
+                        const isSaved = savedShelves[String(bookId)] === "Want to Read";
+                        const isSaving = savingBookId === bookId;
+                        return (
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              disabled={!bookId || savingBookId !== null || isSaved}
+                              onClick={() => onSave(book, "Want to Read")}
+                              className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#A87970] px-2 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#946C64] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isSaving ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin" />
+                              ) : isSaved ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <Bookmark className="h-4 w-4" />
+                              )}
+                              {isSaving ? "กำลังบันทึก..." : isSaved ? "บันทึกแล้ว" : "Save to Want to Read"}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </article>
                 );

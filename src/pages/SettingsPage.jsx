@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import SettingsLayout from "../components/SettingsLayout";
+import UserAvatar from "../components/UserAvatar";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
@@ -27,6 +28,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
+
+import firstLogin from "../assets/pink-cloud-circle-frame-2026.png";
+import reviewFive from "../assets/red-fire-abstract-frame.png";
+import toponeNOV from "../assets/blue-and-orange-fish-frame.png";
+import toptwoNOV from "../assets/cute-bunnies-hug-frame.png";
+import topthreeNOV from "../assets/running-dogs-and-paws-frame.png";
+import toponeDEC from "../assets/red-cat-yarn-frame.png.png";
+import toptwoDEC from "../assets/green-leaves-and-blue-clouds-frame.png";
+import topthreeDEC from "../assets/golden-thorn-vines-frame.png";
+
+const FRAME_IMAGES = {
+  1: firstLogin,
+  2: reviewFive,
+  3: toponeNOV,
+  4: toptwoNOV,
+  5: topthreeNOV,
+  6: toponeDEC,
+  7: toptwoDEC,
+  8: topthreeDEC,
+};
 
 const pageInfo = {
   "/settings": ["ตั้งค่า", "โปรไฟล์ บัญชี และข้อมูลเวอร์ชัน"],
@@ -92,7 +113,7 @@ export default function SettingsPage() {
       if (data.user?.id) {
         supabase
           .from("User")
-          .select("User_Name, User_Avatar_URL")
+          .select("User_Name, User_Avatar_URL, Active_Frame_RewardsID")
           .eq("auth_user_id", data.user.id)
           .maybeSingle()
           .then(({ data: profileRow, error: profileError }) => {
@@ -219,18 +240,14 @@ export default function SettingsPage() {
             onClick={() => navigate("/profile")}
             className="group flex w-full items-center gap-4 rounded-3xl border border-[#F0E1DA] bg-[#FFF8F5] p-5 text-left shadow-sm transition hover:border-[#D9AAA5] hover:shadow-md sm:p-6"
           >
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#F3D5C9] text-2xl font-bold text-[#865B4D] shadow-sm sm:h-20 sm:w-20">
-              {profile?.User_Avatar_URL ? (
-                <img
-                  src={profile.User_Avatar_URL}
-                  alt="รูปโปรไฟล์"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                (profile?.User_Name || username || user?.email || "U")
-                  .charAt(0)
-                  .toUpperCase()
-              )}
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center sm:h-20 sm:w-20">
+              <UserAvatar
+                avatarUrl={profile?.User_Avatar_URL || null}
+                userName={profile?.User_Name || username || "นักอ่าน"}
+                frameImage={FRAME_IMAGES[Number(profile?.Active_Frame_RewardsID)] || null}
+                size={64}
+                frameScale={1.3}
+              />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#A36D70]">

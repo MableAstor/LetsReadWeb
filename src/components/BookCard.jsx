@@ -6,7 +6,7 @@ function BookCover({ book }) {
   const [imageError, setImageError] = useState(false);
 
   return (
-    <div className="group relative mx-auto aspect-[3/4] w-full min-w-0 overflow-hidden rounded-lg bg-[#F7E4DE]">
+    <div className="group relative mx-auto aspect-[3/4] w-full min-w-0 overflow-hidden rounded-2xl bg-[#F7E4DE] ring-1 ring-[#F0DDD7]">
       {!imageError && book.image ? (
         <img
           src={book.image}
@@ -43,9 +43,9 @@ function getBookCategories(book) {
     if (Array.isArray(value)) return value;
     return value == null ? [] : [value];
   }).flatMap((value) => {
-    if (typeof value === "string") return [value];
+    if (typeof value === "string") return value.split(/[,，、;|]+/).map((part) => part.trim()).filter(Boolean);
     if (value && typeof value === "object") {
-      return [value.name ?? value.Category_Name ?? value.category_name].filter(Boolean);
+      return String(value.name ?? value.Category_Name ?? value.category_name ?? "").split(/[,，、;|]+/).map((part) => part.trim()).filter(Boolean);
     }
     return [];
   });
@@ -57,28 +57,28 @@ export function BookCard({ book, hasActions = false }) {
   const categories = getBookCategories(book);
 
   return (
-    <Card className="group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border-2 bg-white py-0 shadow-sm transition-shadow duration-200 hover:shadow-md">
-      <CardContent className={`min-w-0 p-2 sm:p-3 ${hasActions ? "pb-11 sm:pb-12" : "pb-3"}`}>
+    <Card className="group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[18px] border border-[#F0E0D9] bg-[#FFFCFA] py-0 shadow-none transition-all duration-200 hover:border-[#E7C7C4]">
+      <CardContent className={`min-w-0 p-1.5 sm:p-2 ${hasActions ? "pb-11 sm:pb-12" : "pb-3"}`}>
         <BookCover key={book.image} book={book} />
 
         {/* ชื่ออยู่ติดใต้ปก ไม่ถูกดันลงไปท้ายการ์ด */}
         <h3
           title={book.title}
-          className="mt-2 line-clamp-2 min-w-0 break-words text-xs font-semibold leading-snug text-[#533C3E] sm:text-sm"
+          className="mt-2 line-clamp-2 min-w-0 break-words text-xs font-semibold leading-snug text-[#674B50] sm:text-sm"
         >
           {book.title}
         </h3>
 
         {/* หมวดหนังสืออยู่ใต้ชื่อ */}
         {categories.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap items-start gap-1">
+          <div className="mt-2 flex min-w-0 flex-wrap items-start gap-x-1.5 gap-y-1.5">
             {categories.map((category) => (
               <Badge
                 key={category}
                 variant="secondary"
-                className="max-w-full whitespace-normal break-words rounded-full bg-[#FAEFEB] px-1.5 py-0.5 text-[10px] font-normal text-[#A36D70]"
+                className="inline-flex max-w-full min-w-0 rounded-full border-0 bg-[#FBEDEA] px-2 py-1 text-[10px] leading-tight font-medium text-[#A36D70] shadow-none"
               >
-                {category}
+                <span className="block max-w-full truncate" title={category}>{category}</span>
               </Badge>
             ))}
           </div>

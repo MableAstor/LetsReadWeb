@@ -1,3 +1,4 @@
+import LibrarySkeleton from "../components/skeleton/LibrarySkeleton";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -10,7 +11,6 @@ import Savebookfrom from "../components/Savebookfrom";
 
 import {
   getLibraryShelves,
-  saveBookToLibrary,
   removeBookFromLibrary,
 } from "../services/librarySaveService";
 
@@ -53,7 +53,6 @@ export default function LibraryPage() {
   const [savedError, setSavedError] = useState("");
   const [shelfLoading, setShelfLoading] = useState(true);
   const [shelfError, setShelfError] = useState("");
-  const [busyBookId, setBusyBookId] = useState(null);
 
   // ======================================================
   // โหลด Saved Books จาก Backend
@@ -211,22 +210,6 @@ export default function LibraryPage() {
     return () => window.removeEventListener("focus", onFocus);
   }, [loadWantToRead, loadSavedBooks]);
 
-  const moveToWantToBuy = async (book) => {
-    if (busyBookId !== null) return;
-    setBusyBookId(book.id);
-    try {
-      await saveBookToLibrary(book, "Want to Buy");
-      setLibrary((prev) => ({
-        ...prev,
-        wantToRead: prev.wantToRead.filter((item) => String(item.id) !== String(book.id)),
-      }));
-    } catch (error) {
-      window.alert(error.message || "ย้ายหนังสือไม่สำเร็จ");
-    } finally {
-      setBusyBookId(null);
-    }
-  };
-
   // ======================================================
   // ตรวจสอบว่าเป็นรีวิวที่มาจากระบบ Save หรือไม่
   // ======================================================
@@ -339,17 +322,13 @@ export default function LibraryPage() {
     }
   };
 
-  const markAsRead = (book) => {
-    console.log("Mark as Read:", book);
-  };
-
   const currentItems = library[activeTab] ?? [];
 
   return (
     <main
       className="
         mx-auto w-full max-w-5xl
-        min-w-0 px-3 pt-4
+        min-w-0 px-3 pt-4 bg-[#faf7f2]
         pb-[calc(110px+env(safe-area-inset-bottom))]
         sm:px-5 sm:pt-6
         lg:pb-10
@@ -358,7 +337,7 @@ export default function LibraryPage() {
       {/* Header */}
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold sm:text-3xl">
+          <h1 className="text-2xl font-bold text-[#533c3e] sm:text-3xl">
             Library
           </h1>
 
@@ -373,7 +352,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white/70 p-2 shadow-sm">
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-[#f0e1db] bg-[#fffaf7] p-2 shadow-sm">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const selected = activeTab === tab.value;
@@ -393,7 +372,7 @@ export default function LibraryPage() {
                 sm:px-3 sm:text-sm
                 ${
                   selected
-                    ? "bg-[#FAEFEB] text-[#A36D70]"
+                    ? "bg-[#FAEFEB] text-[#A36D70] shadow-sm"
                     : "text-muted-foreground"
                 }
               `}
@@ -404,7 +383,7 @@ export default function LibraryPage() {
                 {tab.label}
               </span>
 
-              <span>({library[tab.value].length})</span>
+              
             </Button>
           );
         })}
@@ -412,11 +391,7 @@ export default function LibraryPage() {
 
       {/* Book Grid */}
       {activeTab === "savedBooks" && savedLoading ? (
-        <div className="flex min-h-60 items-center justify-center rounded-2xl border border-dashed bg-white/70 p-6">
-          <p className="text-sm text-muted-foreground">
-            กำลังโหลด Saved Books...
-          </p>
-        </div>
+        <LibrarySkeleton />
       ) : activeTab === "savedBooks" && savedError ? (
         <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
           <p className="text-sm text-red-600">
@@ -432,9 +407,7 @@ export default function LibraryPage() {
           </Button>
         </div>
       ) : activeTab === "wantToRead" && shelfLoading ? (
-        <div className="flex min-h-60 items-center justify-center rounded-2xl border border-dashed bg-white/70 p-6">
-          <p className="text-sm text-muted-foreground">กำลังโหลด Want to Read...</p>
-        </div>
+        <LibrarySkeleton />
       ) : activeTab === "wantToRead" && shelfError ? (
         <div className="flex min-h-60 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-white/70 p-6 text-center">
           <p className="text-sm text-red-600">{shelfError}</p>
@@ -465,7 +438,6 @@ export default function LibraryPage() {
                 key={entry.book.id}
                 book={entry.book}
                 review={entry.review}
-                onMarkAsRead={markAsRead}
                 onRemove={(book) =>
                   removeBook("savedBooks", book)
                 }
@@ -477,10 +449,8 @@ export default function LibraryPage() {
               <WanttoRead
                 key={book.id}
                 book={book}
-                onMarkAsRead={markAsRead}
-                onMoveToWantToBuy={moveToWantToBuy}
                 onRemove={(book) => {
-                  if (busyBookId === null) removeBook("wantToRead", book);
+                  removeBook("wantToRead", book);
                 }}
               />
             ))}

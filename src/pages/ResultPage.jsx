@@ -2,7 +2,11 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { getLibraryShelves, saveBookToLibrary, getBookIdForLibrary } from "../services/librarySaveService";
+import {
+  getLibraryShelves,
+  saveBookToLibrary,
+  getBookIdForLibrary,
+} from "../services/librarySaveService";
 
 import { rebuildPreferences } from "../services/swipeService";
 import { getFinalRecommendations } from "../services/recommendationService";
@@ -15,11 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-} from "../components/ui/card";
-
+import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 
 import ResultBookCard from "../components/result/ResultBookCard";
@@ -36,6 +36,43 @@ const bookKey = (book) =>
       ""
   );
 
+// ใช้ Promise ร่วมกันหาก React เรียก Effect ซ้ำ
+// ในช่วงที่คำขอเดิมยังไม่เสร็จ
+const recommendationRequests = new Map();
+
+function loadRecommendations({
+  likedBooks,
+  swipedBooks,
+  recommendationPool,
+  selectedCategories,
+  selectedSubcategories,
+}) {
+  return (async () => {
+    const preferenceResponse = await rebuildPreferences();
+    const preferences = preferenceResponse?.preferences;
+
+    if (!Array.isArray(preferences)) {
+      console.error(
+        "[RESULT] Invalid preference response:",
+        preferenceResponse
+      );
+
+      throw new Error(
+        "Backend ส่ง User_Preferences ไม่ถูกต้อง: ต้องเป็น Array"
+      );
+    }
+
+    return getFinalRecommendations({
+      preferences,
+      likes: likedBooks,
+      swiped: swipedBooks,
+      pool: recommendationPool,
+      selectedCategories,
+      selectedSubcategories,
+    });
+  })();
+}
+
 export default function Result() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -46,15 +83,7 @@ export default function Result() {
     ? routeState.likedBooks
     : [];
 
-  const dislikedBooks = Array.isArray(
-    routeState.dislikedBooks
-  )
-    ? routeState.dislikedBooks
-    : [];
-
-  const swipedBooks = Array.isArray(
-    routeState.swipedBooks
-  )
+  const swipedBooks = Array.isArray(routeState.swipedBooks)
     ? routeState.swipedBooks
     : [];
 
@@ -81,103 +110,141 @@ export default function Result() {
   const [resultData, setResultData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showLikedBooks, setShowLikedBooks] =
-    useState(false);
+  const [showLikedBooks, setShowLikedBooks] = useState(false);
+
+  // ใช้ location.key เพื่อแยกการเข้าหน้า Result แต่ละครั้ง
+  const requestKey = location.key;
 
   useEffect(() => {
     let active = true;
 
-    const fetchRecommendations = async () => {
-      setLoading(true);
+    if (likedBooks.length === 0) {
+      setLoading(false);
       setError("");
       setResultData(null);
+      return () => {
+        active = false;
+      };
+    }
 
-      if (likedBooks.length === 0) {
-        setLoading(false);
-        return;
-      }
+    if (recommendationPool.length === 0) {
+      setLoading(false);
+      setError("ไม่พบรายการหนังสือสำหรับใช้แนะนำ");
+      setResultData(null);
+      return () => {
+        active = false;
+      };
+    }
 
-      if (recommendationPool.length === 0) {
+    setLoading(true);
+    setError("");
+    setResultData(null);
+
+    // คำขอเดียวกันใช้ Promise เดียวกัน
+    let request = recommendationRequests.get(requestKey);
+
+    if (!request) {
+      request = loadRecommendations({
+        likedBooks,
+        swipedBooks,
+        recommendationPool,
+        selectedCategories,
+        selectedSubcategories,
+      });
+
+      recommendationRequests.set(requestKey, request);
+
+      // ล้าง Cache เมื่อคำขอเสร็จ
+      // ไม่เก็บผล Recommendation ค้างไว้
+      request.then(
+        () => {
+          if (recommendationRequests.get(requestKey) === request) {
+            recommendationRequests.delete(requestKey);
+          }
+        },
+        () => {
+          if (recommendationRequests.get(requestKey) === request) {
+            recommendationRequests.delete(requestKey);
+          }
+        }
+      );
+    }
+
+    request
+      .then((payload) => {
+        if (!active) return;
+        setResultData(payload);
+      })
+      .catch((err) => {
+        console.error("[Result] Recommendation error:", err);
+
+        if (!active) return;
+
         setError(
-          "ไม่พบรายการหนังสือสำหรับใช้แนะนำ"
+          err?.message || "ไม่สามารถโหลดผลการแนะนำหนังสือได้"
         );
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // โหลด Preference ล่าสุดจาก Backend
-        const preferences =
-          await rebuildPreferences();
-
-        // Python จัดอันดับจาก Preference
-        const payload =
-          await getFinalRecommendations({
-            preferences,
-            likes: likedBooks,
-            swiped: swipedBooks,
-            pool: recommendationPool,
-            selectedCategories,
-            selectedSubcategories,
-          });
-
-        if (active) {
-          setResultData(payload);
-        }
-      } catch (err) {
-        console.error(
-          "[Result] Recommendation error:",
-          err
-        );
-
-        if (active) {
-          setError(
-            err.message ||
-              "ไม่สามารถโหลดผลการแนะนำหนังสือได้"
-          );
-        }
-      } finally {
+      })
+      .finally(() => {
         if (active) {
           setLoading(false);
         }
-      }
-    };
-
-    fetchRecommendations();
+      });
 
     return () => {
       active = false;
     };
-  }, [
-    likedBooks,
-    dislikedBooks,
-    swipedBooks,
-    recommendationPool,
-    selectedCategories,
-    selectedSubcategories,
-  ]);
+
+    // การคำนวณใหม่จะเริ่มเมื่อเข้าหน้า Result ครั้งใหม่
+    // ไม่เริ่มซ้ำจาก Array ที่สร้างใหม่ระหว่าง render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
 
   useEffect(() => {
     let active = true;
+
     getLibraryShelves()
       .then((shelves) => {
         if (!active) return;
-        setSavedShelves(Object.fromEntries(shelves.map((shelf) => [String(shelf.BooksID), shelf.Shelve_Type])));
+
+        setSavedShelves(
+          Object.fromEntries(
+            shelves.map((shelf) => [
+              String(shelf.BooksID),
+              shelf.Shelve_Type,
+            ])
+          )
+        );
       })
-      .catch((err) => console.warn("[Library] Could not load shelves:", err));
-    return () => { active = false; };
+      .catch((err) => {
+        console.warn("[Library] Could not load shelves:", err);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const handleSaveBook = async (book, shelfType = "Want to Read") => {
+  const handleSaveBook = async (
+    book,
+    shelfType = "Want to Read"
+  ) => {
     const bookId = getBookIdForLibrary(book);
+
     if (!bookId || savingBookId !== null) return;
+
     setSavingBookId(bookId);
+
     try {
       await saveBookToLibrary(book, shelfType);
-      setSavedShelves((previous) => ({ ...previous, [String(bookId)]: shelfType }));
+
+      setSavedShelves((previous) => ({
+        ...previous,
+        [String(bookId)]: shelfType,
+      }));
+
       toast.success(`บันทึกลง ${shelfType} แล้ว`);
     } catch (err) {
-      toast.error(err.message || "บันทึกหนังสือไม่สำเร็จ");
+      toast.error(err?.message || "บันทึกหนังสือไม่สำเร็จ");
     } finally {
       setSavingBookId(null);
     }
@@ -206,29 +273,23 @@ export default function Result() {
 
   const topThree = recommendations.slice(0, 3);
 
-  const topThreeKeys = new Set(
-    topThree.map(bookKey)
-  );
+  const topThreeKeys = new Set(topThree.map(bookKey));
 
-  const additionalDiscoveryBooks =
-    discoveryBooks.filter(
-      (book) => !topThreeKeys.has(bookKey(book))
-    );
+  const additionalDiscoveryBooks = discoveryBooks.filter(
+    (book) => !topThreeKeys.has(bookKey(book))
+  );
 
   return (
     <main className="relative min-h-dvh w-full overflow-x-hidden bg-[#faf7f2] px-3 pb-[calc(110px+env(safe-area-inset-bottom))] pt-5 font-sans sm:px-6 sm:pt-8 lg:pb-12">
       {/* Background */}
       <div className="pointer-events-none absolute -left-28 -top-24 h-72 w-72 rounded-full bg-[#f4dfdc]/50 blur-3xl" />
-
       <div className="pointer-events-none absolute -right-28 top-1/3 h-80 w-80 rounded-full bg-[#eee5d7]/60 blur-3xl" />
 
       <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-7 sm:gap-9">
-
         {/* Hero */}
         <Card className="overflow-hidden rounded-3xl border border-[#eee5dc] bg-[#fffdf9] py-0 shadow-sm">
           <CardContent className="p-5 sm:p-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b69a8e] sm:text-xs">
                   Your Reading Discovery
@@ -244,7 +305,6 @@ export default function Result() {
               </div>
 
               <div className="flex shrink-0 items-center justify-between gap-4 rounded-2xl bg-[#f7eee9] p-3 sm:min-w-[210px] sm:flex-col sm:items-stretch sm:p-4">
-
                 <div>
                   <p className="text-xs text-[#9a8d82]">
                     หนังสือที่คุณกดถูกใจ
@@ -260,12 +320,8 @@ export default function Result() {
 
                 <Button
                   type="button"
-                  onClick={() =>
-                    setShowLikedBooks(true)
-                  }
-                  disabled={
-                    likedBooks.length === 0
-                  }
+                  onClick={() => setShowLikedBooks(true)}
+                  disabled={likedBooks.length === 0}
                   className="h-9 rounded-full bg-[#a87970] px-4 text-xs font-semibold text-white hover:bg-[#946c64] disabled:opacity-50"
                 >
                   <Heart className="mr-1 h-3.5 w-3.5" />
@@ -280,7 +336,6 @@ export default function Result() {
         {loading && (
           <Card className="mx-auto w-full max-w-md rounded-3xl border-[#eee5dc] bg-white/90 shadow-sm">
             <CardContent className="flex flex-col items-center px-5 py-12 text-center">
-
               <LoaderCircle className="h-9 w-9 animate-spin text-[#bd9188]" />
 
               <h2 className="mt-4 text-sm font-semibold text-[#403b37]">
@@ -298,7 +353,6 @@ export default function Result() {
         {!loading && error && (
           <Card className="mx-auto w-full max-w-md rounded-3xl border-[#ead9d5] bg-white shadow-sm">
             <CardContent className="flex flex-col items-center px-5 py-9 text-center">
-
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#f7e9e7]">
                 <BookOpen className="h-7 w-7 text-[#bd8580]" />
               </div>
@@ -324,121 +378,103 @@ export default function Result() {
         )}
 
         {/* ยังไม่มีหนังสือที่กด Like */}
-        {!loading &&
-          !error &&
-          likedBooks.length === 0 && (
-            <Card className="mx-auto w-full max-w-md rounded-3xl border-[#eee5dc] bg-white shadow-sm">
-              <CardContent className="flex flex-col items-center px-5 py-10 text-center">
+        {!loading && !error && likedBooks.length === 0 && (
+          <Card className="mx-auto w-full max-w-md rounded-3xl border-[#eee5dc] bg-white shadow-sm">
+            <CardContent className="flex flex-col items-center px-5 py-10 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#f7e9e7]">
+                <Heart className="h-9 w-9 text-[#c98785]" />
+              </div>
 
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#f7e9e7]">
-                  <Heart className="h-9 w-9 text-[#c98785]" />
-                </div>
+              <h2 className="mt-5 text-base font-bold text-[#403b37]">
+                ยังไม่มีหนังสือที่ถูกใจ
+              </h2>
 
-                <h2 className="mt-5 text-base font-bold text-[#403b37]">
-                  ยังไม่มีหนังสือที่ถูกใจ
-                </h2>
+              <p className="mt-2 text-xs leading-relaxed text-[#a29589] sm:text-sm">
+                ลองกลับไปค้นหาและเลือกหนังสือที่สนใจอีกครั้งนะคะ
+              </p>
 
-                <p className="mt-2 text-xs leading-relaxed text-[#a29589] sm:text-sm">
-                  ลองกลับไปค้นหาและเลือกหนังสือที่สนใจอีกครั้งนะคะ
-                </p>
-
-                <Button
-                  type="button"
-                  onClick={handleRestart}
-                  className="mt-6 rounded-full bg-[#a87970] px-6 text-white hover:bg-[#946c64]"
-                >
-                  <RefreshCcw className="mr-2 h-4 w-4" />
-                  เริ่มค้นหาใหม่
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+              <Button
+                type="button"
+                onClick={handleRestart}
+                className="mt-6 rounded-full bg-[#a87970] px-6 text-white hover:bg-[#946c64]"
+              >
+                <RefreshCcw className="mr-1 h-4 w-4" />
+                เริ่มค้นหาใหม่
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Results */}
-        {!loading &&
-          !error &&
-          likedBooks.length > 0 && (
-            <>
-              <ResultSection
-                icon="🏆"
-                title="TOP 3 เล่มที่อาจจะตรงใจกับคุณ"
-                description="หนังสือที่ระบบแนะนำจากความสนใจของคุณ"
-              >
-                {topThree.length > 0 ? (
-                  <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
-                    {topThree.map(
-                      (book, index) => (
-                        <ResultBookCard
-                          key={
-                            bookKey(book) ||
-                            index
-                          }
-                          book={book}
-                          rank={index + 1}
-                        />
-                      )
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-[#e8ddd3] bg-white/70 px-4 py-8 text-center">
-                    <p className="text-sm text-[#a29589]">
-                      ยังไม่มีหนังสือในรายการ TOP 3
-                    </p>
-                  </div>
-                )}
-              </ResultSection>
+        {!loading && !error && likedBooks.length > 0 && (
+          <>
+            <ResultSection
+              icon="🏆"
+              title="TOP 3 เล่มที่อาจจะตรงใจกับคุณ"
+              description="หนังสือที่ระบบแนะนำจากความสนใจของคุณ"
+            >
+              {topThree.length > 0 ? (
+                <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
+                  {topThree.map((book, index) => (
+                    <ResultBookCard
+                      key={bookKey(book) || index}
+                      book={book}
+                      rank={index + 1}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#e8ddd3] bg-white/70 px-4 py-8 text-center">
+                  <p className="text-sm text-[#a29589]">
+                    ยังไม่มีหนังสือในรายการ TOP 3
+                  </p>
+                </div>
+              )}
+            </ResultSection>
 
-              <ResultSection
-                icon={
-                  <Sparkles className="h-5 w-5 text-[#b18c64]" />
-                }
-                title="Discovery — ลองค้นพบแนวใหม่"
-                description="หนังสือเพิ่มเติมที่ระบบนำเสนอให้คุณได้ลองเปิดใจ"
-              >
-                {additionalDiscoveryBooks.length >
-                0 ? (
-                  <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
-                    {additionalDiscoveryBooks.map(
-                      (book, index) => (
-                        <ResultBookCard
-                          key={
-                            bookKey(book) ||
-                            index
-                          }
-                          book={book}
-                        />
-                      )
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-[#e8ddd3] bg-white/70 px-4 py-8 text-center">
-                    <p className="text-sm text-[#a29589]">
-                      ยังไม่มีหนังสือ Discovery เพิ่มเติม
-                    </p>
-                  </div>
-                )}
-              </ResultSection>
+            <ResultSection
+              icon={
+                <Sparkles className="h-5 w-5 text-[#b18c64]" />
+              }
+              title="Discovery — ลองค้นพบแนวใหม่"
+              description="หนังสือเพิ่มเติมที่ระบบนำเสนอให้คุณได้ลองเปิดใจ"
+            >
+              {additionalDiscoveryBooks.length > 0 ? (
+                <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
+                  {additionalDiscoveryBooks.map((book, index) => (
+                    <ResultBookCard
+                      key={bookKey(book) || index}
+                      book={book}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#e8ddd3] bg-white/70 px-4 py-8 text-center">
+                  <p className="text-sm text-[#a29589]">
+                    ยังไม่มีหนังสือ Discovery เพิ่มเติม
+                  </p>
+                </div>
+              )}
+            </ResultSection>
 
-              <div className="flex justify-center pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleRestart}
-                  className="h-11 rounded-full border-[#e6d9cf] bg-white px-6 text-xs font-semibold text-[#74675e] shadow-sm hover:bg-[#f7eee9] sm:text-sm"
-                >
-                  <RefreshCcw className="mr-2 h-4 w-4" />
-                  เริ่มค้นหาหนังสือใหม่
-                </Button>
-              </div>
-            </>
-          )}
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRestart}
+                className="h-11 rounded-full border-[#e6d9cf] bg-white px-6 text-xs font-semibold text-[#74675e] shadow-sm hover:bg-[#f7eee9] sm:text-sm"
+              >
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                เริ่มค้นหาหนังสือใหม่
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       <LikedBooksDialog
         open={showLikedBooks}
-        onClose={() =>
-          setShowLikedBooks(false)
-        }
+        onClose={() => setShowLikedBooks(false)}
         books={likedBooks}
         onSave={handleSaveBook}
         savedShelves={savedShelves}

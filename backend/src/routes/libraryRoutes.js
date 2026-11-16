@@ -67,19 +67,16 @@ router.get("/library/books", async (req, res) => {
   }
 });
 
-/* ======================================================
-   LIBRARY: โหลด Want to Read และ Want to Buy
-   GET /api/auth/shelves
 
-   ลำดับรูป:
-   1. รูปจาก Reviews.Image_URL ของหนังสือ
-   2. รูปปกจาก Books.Books_Cover
+
+/* ======================================================
+   LIBRARY: โหลด Want to Read
+   GET /api/auth/shelves
    ====================================================== */
 router.get("/shelves", async (req, res) => {
   try {
     const userProfile = await getLibraryUser(req);
 
-    // 1. ดึงรายการหนังสือในชั้นของผู้ใช้
     const { data: shelves, error: shelvesError } =
       await supabaseAdmin
         .from("User_Shelves")
@@ -95,73 +92,213 @@ router.get("/shelves", async (req, res) => {
       });
     }
 
-    // 2. ดึง BooksID ที่ไม่ซ้ำกัน
     const bookIds = [
       ...new Set(
         shelves
-          .map((item) => item.BooksID)
-          .filter((id) => id !== null && id !== undefined)
+          .map((row) => row.BooksID)
+          .filter((id) => id != null)
       ),
     ];
 
-    // 3. ดึงรายละเอียดหนังสือและรูปปกจาก Books
-    let books = [];
+    // ดึงหนังสือและตารางเชื่อมหมวดหมู่
+    const [
+      booksResponse,
+      categoryLinksResponse,
+      subcategoryLinksResponse,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("Books")
+        .select(
+          "BooksID, Books_title, Books_Cover, Book_Synopsis"
+        )
+        .in("BooksID", bookIds),
 
-    if (bookIds.length > 0) {
-      const { data, error: booksError } =
-        await supabaseAdmin
-          .from("Books")
-          .select(
-            "BooksID, Books_title, Books_Cover, Book_Synopsis"
-          )
-          .in("BooksID", bookIds);
+      supabaseAdmin
+        .from("Book_Categorise")
+        .select("BooksID, CategoriseID")
+        .in("BooksID", bookIds),
 
-      if (booksError) throw booksError;
+      supabaseAdmin
+        .from("Book_Subcategorise")
+        .select("BooksID, SubcategoriseID")
+        .in("BooksID", bookIds),
+    ]);
 
-      books = data || [];
+    if (booksResponse.error) throw booksResponse.error;
+    if (categoryLinksResponse.error) {
+      throw categoryLinksResponse.error;
+    }
+    if (subcategoryLinksResponse.error) {
+      throw subcategoryLinksResponse.error;
     }
 
-    const bookMap = new Map(
-      books.map((book) => [
-        String(book.BooksID),
-        book,
-      ])
+    const categoryLinks =
+      categoryLinksResponse.data || [];
+
+    const subcategoryLinks =
+      subcategoryLinksResponse.data || [];
+
+    const categoryIds = [
+      ...new Set(
+        categoryLinks
+          .map((row) => row.CategoriseID)
+          .filter((id) => id != null)
+      ),
+    ];
+
+    const subcategoryIds = [
+      ...new Set(
+        subcategoryLinks
+          .map((row) => row.SubcategoriseID)
+          .filter((id) => id != null)
+      ),
+    ];
+
+    // ดึงชื่อหมวดหมู่จริง
+    const [
+      categoriesResponse,
+      subcategoriesResponse,
+    ] = await Promise.all([
+      categoryIds.length
+        ? supabaseAdmin
+            .from("Categorise")
+            .select("CategoriseID, Categorise_Name")
+            .in("CategoriseID", categoryIds)
+        : Promise.resolve({
+            data: [],
+            error: null,
+          }),
+
+      subcategoryIds.length
+        ? supabaseAdmin
+            .from("Subcategorise")
+            .select(
+              "SubcategoriseID, Subcategorise_Name"
+            )
+            .in("SubcategoriseID", subcategoryIds)
+        : Promise.resolve({
+            data: [],
+            error: null,
+          }),
+    ]);
+
+    if (categoriesResponse.error) {
+      throw categoriesResponse.error;
+    }
+
+    if (subcategoriesResponse.error) {
+      throw subcategoriesResponse.error;
+    }
+
+    const categoryNameById = new Map(
+      (categoriesResponse.data || []).map(
+        (row) => [
+          String(row.CategoriseID),
+          row.Categorise_Name,
+        ]
+      )
     );
 
-    // ======================================================
-    // 4. ดึงรูปจากรีวิวที่เกี่ยวข้องกับหนังสือเหล่านี้
-    // เรียงรีวิวใหม่ไปเก่า เพื่อให้เลือกภาพล่าสุดที่มีรูป
-    // ======================================================
+    const subcategoryNameById = new Map(
+      (subcategoriesResponse.data || []).map(
+        (row) => [
+          String(row.SubcategoriseID),
+          row.Subcategorise_Name,
+        ]
+      )
+    );
+
+    // จับคู่ชื่อหมวดหมู่กับ BooksID
+    const namesByBook = (
+      links,
+      idKey,
+      namesMap
+    ) => {
+      const result = new Map();
+
+      for (const link of links) {
+        const bookKey = String(link.BooksID);
+        const name = namesMap.get(
+          String(link[idKey])
+        );
+
+        if (!name) continue;
+
+        if (!result.has(bookKey)) {
+          result.set(bookKey, []);
+        }
+
+        if (!result.get(bookKey).includes(name)) {
+          result.get(bookKey).push(name);
+        }
+      }
+
+      return result;
+    };
+
+    const mainByBook = namesByBook(
+      categoryLinks,
+      "CategoriseID",
+      categoryNameById
+    );
+
+    const subByBook = namesByBook(
+      subcategoryLinks,
+      "SubcategoriseID",
+      subcategoryNameById
+    );
+
+    const bookMap = new Map(
+      (booksResponse.data || []).map(
+        (book) => [
+          String(book.BooksID),
+          book,
+        ]
+      )
+    );
+
+    // คงระบบรูปปกเดิม
+    // ใช้รูปจากรีวิวล่าสุดถ้ามี
+    // มิฉะนั้นใช้ Books_Cover
+    // หมายเหตุ: Reviews ใช้เฉพาะรูป ไม่ใช้แท็ก
     const reviewImageMap = new Map();
 
-    if (bookIds.length > 0) {
-      const { data: reviewImages, error: reviewImagesError } =
-        await supabaseAdmin
-          .from("Reviews")
-          .select("BooksID, Image_URL, Created_At")
-          .in("BooksID", bookIds)
-          .not("Image_URL", "is", null)
-          .order("Created_At", { ascending: false });
+    const {
+      data: reviewImages,
+      error: reviewImagesError,
+    } = await supabaseAdmin
+      .from("Reviews")
+      .select(
+        "BooksID, Image_URL, Created_At"
+      )
+      .in("BooksID", bookIds)
+      .not("Image_URL", "is", null)
+      .order("Created_At", {
+        ascending: false,
+      });
 
-      if (reviewImagesError) throw reviewImagesError;
+    if (reviewImagesError) {
+      throw reviewImagesError;
+    }
 
-      for (const review of reviewImages || []) {
-        const bookKey = String(review.BooksID);
-        const imageUrl = String(review.Image_URL || "").trim();
+    for (const review of reviewImages || []) {
+      const key = String(review.BooksID);
+      const url = String(
+        review.Image_URL || ""
+      ).trim();
 
-        // เก็บรูปแรกของแต่ละเล่ม ซึ่งเป็นรูปจากรีวิวล่าสุดที่มีรูป
-        if (imageUrl && !reviewImageMap.has(bookKey)) {
-          reviewImageMap.set(bookKey, imageUrl);
-        }
+      if (
+        url &&
+        !reviewImageMap.has(key)
+      ) {
+        reviewImageMap.set(key, url);
       }
     }
 
-    // ======================================================
-    // 5. รวมข้อมูลชั้นหนังสือและเลือกรูปที่จะแสดง
-    // ถ้ามีรูปรีวิว ใช้รูปรีวิวก่อน มิฉะนั้นใช้ Books_Cover
-    // ======================================================
+    // รวมข้อมูลหนังสือกับหมวดหมู่
     const result = shelves.map((item) => {
-      const book = bookMap.get(String(item.BooksID));
+      const key = String(item.BooksID);
+      const book = bookMap.get(key);
 
       if (!book) {
         return {
@@ -170,18 +307,39 @@ router.get("/shelves", async (req, res) => {
         };
       }
 
-      const reviewImage = reviewImageMap.get(
-        String(item.BooksID)
-      );
+      const categories =
+        mainByBook.get(key) || [];
+
+      const subcategories =
+        subByBook.get(key) || [];
 
       return {
         ...item,
+
         Book: {
           ...book,
 
-          // ส่งรูปที่ควรแสดงใน Library ผ่าน Books_Cover
-          // เพื่อให้หน้าเว็บเดิมที่อ่าน Book.Books_Cover ใช้งานได้
-          Books_Cover: reviewImage || book.Books_Cover || null,
+          Books_Cover:
+            reviewImageMap.get(key) ||
+            book.Books_Cover ||
+            null,
+
+          Main_Category:
+            categories.join(", "),
+
+          Sub_Category:
+            subcategories.join(", "),
+
+          categories,
+
+          subcategories,
+
+          tags: [
+            ...new Set([
+              ...categories,
+              ...subcategories,
+            ]),
+          ],
         },
       };
     });
@@ -190,15 +348,25 @@ router.get("/shelves", async (req, res) => {
       success: true,
       shelves: result,
     });
-  } catch (error) {
-    console.error("[LIBRARY SHELVES] Load error:", error);
 
-    return res.status(error.statusCode || 500).json({
+  } catch (error) {
+    console.error(
+      "[LIBRARY SHELVES] Load error:",
+      error
+    );
+
+    return res.status(
+      error.statusCode || 500
+    ).json({
       success: false,
-      message: error.message || "ไม่สามารถโหลดชั้นหนังสือได้",
+      message:
+        error.message ||
+        "ไม่สามารถโหลดชั้นหนังสือได้",
     });
   }
 });
+
+
 
 /* ======================================================
    LIBRARY: เพิ่มหนังสือหรือย้ายชั้น
@@ -211,7 +379,7 @@ router.post("/shelves", async (req, res) => {
     const { BooksID, Shelve_Type } = req.body;
 
     const bookId = Number(BooksID);
-    const validTypes = ["Want to Read", "Want to Buy"];
+    const validTypes = ["Want to Read"];
 
     if (!Number.isSafeInteger(bookId) || bookId <= 0) {
       return res.status(400).json({
@@ -223,7 +391,7 @@ router.post("/shelves", async (req, res) => {
     if (!validTypes.includes(Shelve_Type)) {
       return res.status(400).json({
         success: false,
-        message: "Shelve_Type ต้องเป็น Want to Read หรือ Want to Buy",
+        message: "Shelve_Type ต้องเป็น Want to Read เท่านั้น",
       });
     }
 
@@ -304,7 +472,7 @@ router.delete("/shelves/:bookId", async (req, res) => {
     const bookId = Number(req.params.bookId);
     const shelfType = String(req.query.type || "");
 
-    const validTypes = ["Want to Read", "Want to Buy"];
+    const validTypes = ["Want to Read"];
 
     if (!Number.isSafeInteger(bookId) || bookId <= 0) {
       return res.status(400).json({
@@ -510,8 +678,10 @@ router.get("/saved-reviews", async (req, res) => {
       const { data, error: usersError } =
         await supabaseAdmin
           .from("User")
-          .select("UserID, User_Name")
-          .in("UserID", userIds);
+.select(
+  "UserID, User_Name, User_Avatar_URL, Active_Frame_RewardsID"
+)
+.in("UserID", userIds);
 
       if (usersError) throw usersError;
 
@@ -519,11 +689,11 @@ router.get("/saved-reviews", async (req, res) => {
     }
 
     const userMap = new Map(
-      users.map((user) => [
-        String(user.UserID),
-        user.User_Name,
-      ])
-    );
+  users.map((user) => [
+    String(user.UserID),
+    user,
+  ])
+);
 
     const reviewMap = new Map(
       reviewList.map((review) => [
@@ -551,7 +721,16 @@ router.get("/saved-reviews", async (req, res) => {
             bookCoverMap.get(String(review.BooksID)) || null,
 
           User_Name:
-            userMap.get(String(review.UserID)) || "ผู้ใช้",
+  userMap.get(String(review.UserID))?.User_Name ||
+  "ผู้ใช้",
+
+User_Avatar_URL:
+  userMap.get(String(review.UserID))
+    ?.User_Avatar_URL || null,
+
+Active_Frame_RewardsID:
+  userMap.get(String(review.UserID))
+    ?.Active_Frame_RewardsID || null,
 
           Saved_At: saved.Created_At,
           Saved_By_Me: true,
