@@ -389,7 +389,7 @@ export default function Swipeforbooks() {
   action,
   bookId: Number(bookId),
   sessionId: activeSessionId,
-  requestId: crypto.randomUUID(),
+  requestId: pending.requestId,
 });
 
         // เมื่อ Backend ยืนยันแล้ว ห้าม Insert ซ้ำ
@@ -400,10 +400,10 @@ export default function Swipeforbooks() {
         setSwipedBooks(pending.updatedSwiped);
 
         if (
-          result.preferencesUpdated === true &&
-          Array.isArray(result.preferences)
+          swipeResult.preferencesUpdated === true &&
+          Array.isArray(swipeResult.preferences)
         ) {
-          pending.preferences = result.preferences;
+          pending.preferences = swipeResult.preferences;
         }
 
         console.log(
