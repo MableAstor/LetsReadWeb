@@ -187,7 +187,7 @@ export default function useEditProfile() {
         if (!active) return;
 
         if (!user) {
-          navigate("/settings/profile", {
+          navigate("/profile", {
             replace: true,
           });
           return;
