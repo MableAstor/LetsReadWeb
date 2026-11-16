@@ -31,11 +31,11 @@ export const saveSwipeHistory = async ({
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      action,
-      bookId,
-      sessionId,
-      requestId: requestId || crypto.randomUUID(),
-    }),
+  action,
+  bookId,
+  sessionId,
+  requestId,
+}),
   });
 
   const result = await response.json().catch(() => null);

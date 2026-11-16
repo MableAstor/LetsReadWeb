@@ -385,12 +385,12 @@ export default function Swipeforbooks() {
 
         const swipeStart = performance.now();
 
-        const result = await saveSwipeHistory({
-          action: pending.action,
-          bookId: pending.bookId,
-          sessionId: activeSessionId,
-          requestId: pending.requestId,
-        });
+        const swipeResult = await saveSwipeHistory({
+  action,
+  bookId: Number(bookId),
+  sessionId: activeSessionId,
+  requestId: crypto.randomUUID(),
+});
 
         // เมื่อ Backend ยืนยันแล้ว ห้าม Insert ซ้ำ
         pending.committed = true;
