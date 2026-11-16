@@ -34,6 +34,20 @@ const rewardDefinitions = [
     target: 1,
     metric: "savedReviews",
   },
+    {
+    code: "FIRST_SWIPE",
+    name: "First Swipe",
+    description: "ปัดหนังสือเป็นครั้งแรก",
+    target: 1,
+    metric: "swipes",
+  },
+  {
+    code: "SWIPE_50",
+    name: "Book Explorer",
+    description: "ปัดหนังสือครบ 50 ครั้ง",
+    target: 50,
+    metric: "swipes",
+  },
 ];
 
 // ======================================================
@@ -193,24 +207,38 @@ async function getRewardCatalog() {
 // ======================================================
 
 async function getUserActivityCounts(userId) {
-  const [reviewsResult, savedReviewsResult] =
-    await Promise.all([
-      supabaseAdmin
-        .from("Reviews")
-        .select("ReviewsID", {
-          count: "exact",
-          head: true,
-        })
-        .eq("UserID", userId),
+  const [
+    reviewsResult,
+    savedReviewsResult,
+    swipesResult,
+  ] = await Promise.all([
+    // นับจำนวนรีวิว
+    supabaseAdmin
+      .from("Reviews")
+      .select("ReviewsID", {
+        count: "exact",
+        head: true,
+      })
+      .eq("UserID", userId),
 
-      supabaseAdmin
-        .from("Saved_Reviews")
-        .select("ReviewsID", {
-          count: "exact",
-          head: true,
-        })
-        .eq("UserID", userId),
-    ]);
+    // นับจำนวนรีวิวที่บันทึกไว้
+    supabaseAdmin
+      .from("Saved_Reviews")
+      .select("ReviewsID", {
+        count: "exact",
+        head: true,
+      })
+      .eq("UserID", userId),
+
+    // นับจำนวนครั้งที่ปัดหนังสือ
+    supabaseAdmin
+      .from("Swipe_History")
+      .select("Swipe_HistoryID", {
+        count: "exact",
+        head: true,
+      })
+      .eq("UserID", userId),
+  ]);
 
   if (reviewsResult.error) {
     throw reviewsResult.error;
@@ -220,9 +248,14 @@ async function getUserActivityCounts(userId) {
     throw savedReviewsResult.error;
   }
 
+  if (swipesResult.error) {
+    throw swipesResult.error;
+  }
+
   return {
     reviews: reviewsResult.count || 0,
     savedReviews: savedReviewsResult.count || 0,
+    swipes: swipesResult.count || 0,
   };
 }
 
@@ -658,7 +691,6 @@ async function checkAndGrantFrames(userId, counts) {
       continue;
     }
 
-    // ปลดล็อกให้เฉพาะผู้ใช้ที่ได้อันดับนั้น
     if (String(winner.UserID) === String(userId)) {
       await unlockFrame(frame);
     }

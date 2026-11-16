@@ -377,9 +377,13 @@ export default function Swipeforbooks() {
         pendingSwipeRef.current = pending;
       }
 
+
+
       // STEP 1: บันทึก Swipe ก่อน
       if (!pending.committed) {
         const activeSessionId = await ensureSession();
+
+        const swipeStart = performance.now();
 
         const result = await saveSwipeHistory({
           action: pending.action,
@@ -401,12 +405,20 @@ export default function Swipeforbooks() {
         ) {
           pending.preferences = result.preferences;
         }
+
+        console.log(
+  "[PERFORMANCE] Save Swipe:",
+  (performance.now() - swipeStart).toFixed(2),
+  "ms"
+);
       }
 
       // STEP 2: โหลด Preference หากยังไม่มี
       if (!Array.isArray(pending.preferences)) {
         pending.preferences = await rebuildPreferences();
       }
+
+      const recommendStart = performance.now();
 
       // STEP 3: เรียก Python ด้วย preferences ล่าสุด
       const payload = await getNextBook({
@@ -416,6 +428,12 @@ export default function Swipeforbooks() {
         selectedCategories,
         selectedSubcategories,
       });
+
+      console.log(
+  "[PERFORMANCE] Python Recommendation:",
+  (performance.now() - recommendStart).toFixed(2),
+  "ms"
+);
 
       // STEP 4: หนังสือหมดแล้ว ไปหน้า Result
       if (!payload.book) {

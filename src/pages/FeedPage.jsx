@@ -7,26 +7,50 @@ import { supabase } from "../lib/supabase";
 import ReviewInput from "../components/ReviewInput";
 import WriteReviewModal from "../components/WriteReviewModal";
 import ReviewCard from "../components/ReviewCard";
-import UserAvatar from "../components/UserAvatar";
 import ReviewSkeleton from "../components/skeleton/ReviewSkeleton";
 
 import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 
-const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:5000"
-).replace(/\/+$/, "") + "/api/auth";
+const API_URL =
+  (import.meta.env.VITE_API_URL || "http://localhost:5000")
+    .replace(/\/+$/, "") + "/api/auth";
+
+// แยกแท็กจากข้อความ เช่น "Supernatural, Adventure"
+const splitTags = (...categories) => {
+  return categories
+    .filter(Boolean)
+    .flatMap((category) =>
+      String(category)
+        .split(/[,，、]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    )
+    .filter(
+      (tag, index, array) =>
+        array.findIndex(
+          (item) =>
+            item.toLowerCase() === tag.toLowerCase()
+        ) === index
+    );
+};
+
+// ทำให้ชื่อแท็กเปรียบเทียบกันได้
+const normalizeTag = (value) =>
+  String(value ?? "").trim().toLowerCase();
 
 export default function FeedPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // States
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviews, setReviews] = useState([]);
+  const [selectedTag, setSelectedTag] = useState(null);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [feedError, setFeedError] = useState("");
 
-  // ตรวจสอบ Login ก่อนทำรายการที่ต้องใช้บัญชี
+  // ตรวจสอบการเข้าสู่ระบบ
   const requireLogin = useCallback(async () => {
     try {
       const {
@@ -46,13 +70,15 @@ export default function FeedPage() {
 
       return true;
     } catch (error) {
-      console.error("[Feed] Check login error:", error);
-      alert("ไม่สามารถตรวจสอบสถานะเข้าสู่ระบบได้ กรุณาลองใหม่");
+      console.error("[Feed] Login error:", error);
+
+      alert("ไม่สามารถตรวจสอบสถานะเข้าสู่ระบบได้");
+
       return false;
     }
   }, [navigate, location.pathname]);
 
-  // เปิดหน้าต่างเขียนรีวิวเมื่อ Login แล้ว
+  // เปิดหน้าต่างเขียนรีวิว
   const handleOpenReview = async () => {
     const isLoggedIn = await requireLogin();
 
@@ -67,38 +93,33 @@ export default function FeedPage() {
       setLoadingReviews(true);
       setFeedError("");
 
-      const requestUrl = `${API_URL}/reviews/test`;
-
-      console.log("[Feed] Request URL:", requestUrl);
-
-      // เก็บ Logic จาก main: ส่ง Access Token
       const {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw sessionError;
-      }
+      if (sessionError) throw sessionError;
 
-      const response = await fetch(requestUrl, {
-        headers: session?.access_token
-          ? {
-              Authorization: `Bearer ${session.access_token}`,
-            }
-          : {},
-      });
+      const response = await fetch(
+        `${API_URL}/reviews/test`,
+        {
+          headers: session?.access_token
+            ? {
+                Authorization: `Bearer ${session.access_token}`,
+              }
+            : {},
+        }
+      );
 
-      // อ่าน Response อย่างปลอดภัย
       const responseText = await response.text();
 
       let result = {};
 
       try {
-        result = responseText ? JSON.parse(responseText) : {};
+        result = responseText
+          ? JSON.parse(responseText)
+          : {};
       } catch {
-        console.error("[Feed] Invalid JSON:", responseText);
-
         throw new Error(
           `เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ใช่ JSON (HTTP ${response.status})`
         );
@@ -112,6 +133,7 @@ export default function FeedPage() {
         );
       }
 
+      // ดึงข้อมูลรีวิว
       const reviewList = Array.isArray(result.reviews)
         ? result.reviews.map((review) => ({
             ...review,
@@ -120,8 +142,6 @@ export default function FeedPage() {
         : [];
 
       setReviews(reviewList);
-
-      console.log("[Feed] Reviews loaded:", reviewList.length);
     } catch (error) {
       console.error("[Feed] Load reviews error:", error);
 
@@ -135,13 +155,46 @@ export default function FeedPage() {
     }
   }, []);
 
+  // โหลดรีวิวเมื่อเข้าหน้า Feed
   useEffect(() => {
     loadReviews();
   }, [loadReviews]);
 
+  // กรองโพสต์ตามแท็กที่เลือก
+  const filteredReviews = selectedTag
+    ? reviews.filter((review) => {
+        const tags = splitTags(
+          review.Main_Category,
+          review.Sub_Category
+        );
+
+        return tags.some(
+          (tag) =>
+            normalizeTag(tag) === normalizeTag(selectedTag)
+        );
+      })
+    : reviews;
+
+  // เมื่อผู้ใช้กดแท็ก
+  const handleTagClick = (tag) => {
+    if (!tag) return;
+
+    setSelectedTag((currentTag) =>
+      normalizeTag(currentTag) === normalizeTag(tag)
+        ? null
+        : tag
+    );
+  };
+
+  // ล้างตัวกรอง
+  const handleClearFilter = () => {
+    setSelectedTag(null);
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
-      {/* Page heading */}
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-5 sm:px-6">
+
+      {/* HEADER */}
       <div className="space-y-1">
         <p className="text-sm font-medium text-[#B77D80]">
           Pastel Book Club
@@ -156,12 +209,12 @@ export default function FeedPage() {
         </p>
       </div>
 
-      {/* Write review */}
+      {/* REVIEW INPUT */}
       <div className="rounded-2xl border border-[#F1D9D2] bg-white/80 p-3 shadow-sm">
         <ReviewInput onClick={handleOpenReview} />
       </div>
 
-      {/* Write review modal */}
+      {/* WRITE REVIEW MODAL */}
       {isReviewOpen && (
         <WriteReviewModal
           onClose={() => setIsReviewOpen(false)}
@@ -169,8 +222,10 @@ export default function FeedPage() {
         />
       )}
 
-      {/* Review list */}
-      <div className="flex flex-col gap-4">
+      {/* REVIEW LIST */}
+      <div className="flex flex-col gap-3">
+
+        {/* SECTION HEADER */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[#684B50]">
             รีวิวจากชุมชน
@@ -178,19 +233,46 @@ export default function FeedPage() {
 
           {!loadingReviews && !feedError && (
             <span className="text-xs text-[#B18A8D]">
-              {reviews.length} รีวิว
+              {filteredReviews.length} รีวิว
             </span>
           )}
         </div>
 
-        {/* Skeleton loading */}
-        {loadingReviews && <ReviewSkeleton count={3} />}
+        {/* ACTIVE TAG FILTER */}
+        {selectedTag && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#F1D9D2] bg-[#FFF1EE] px-3 py-2">
 
-        {/* Error state */}
+            <span className="text-xs text-[#98777A]">
+              กำลังแสดงแท็ก
+            </span>
+
+            <span className="rounded-full border border-[#D99BA0] bg-white px-3 py-1 text-xs font-semibold text-[#A85F69]">
+              {selectedTag}
+            </span>
+
+            <button
+              type="button"
+              onClick={handleClearFilter}
+              className="ml-auto text-xs font-semibold text-[#B77D80] hover:underline"
+            >
+              ล้างตัวกรอง ×
+            </button>
+          </div>
+        )}
+
+        {/* LOADING */}
+        {loadingReviews && (
+          <ReviewSkeleton count={3} />
+        )}
+
+        {/* ERROR */}
         {!loadingReviews && feedError && (
           <Card className="rounded-2xl border-[#F1D9D2] bg-white/90">
             <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-              <div className="text-3xl">📚</div>
+
+              <div className="text-3xl">
+                📚
+              </div>
 
               <p className="font-medium text-[#684B50]">
                 โหลดรีวิวไม่สำเร็จ
@@ -206,17 +288,21 @@ export default function FeedPage() {
               >
                 ลองอีกครั้ง
               </Button>
+
             </CardContent>
           </Card>
         )}
 
-        {/* Empty state */}
+        {/* EMPTY FEED */}
         {!loadingReviews &&
           !feedError &&
           reviews.length === 0 && (
             <Card className="rounded-2xl border-dashed border-[#EBCDC7] bg-white/70">
               <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-                <div className="text-5xl">📖</div>
+
+                <div className="text-5xl">
+                  📖
+                </div>
 
                 <h3 className="font-semibold text-[#684B50]">
                   ยังไม่มีรีวิวในตอนนี้
@@ -232,19 +318,50 @@ export default function FeedPage() {
                 >
                   เขียนรีวิวแรกของคุณ
                 </Button>
+
               </CardContent>
             </Card>
           )}
 
-        {/* Reviews */}
+        {/* NO MATCHING TAG */}
         {!loadingReviews &&
           !feedError &&
-          reviews.map((review) => (
+          selectedTag &&
+          filteredReviews.length === 0 &&
+          reviews.length > 0 && (
+            <div className="rounded-2xl border border-[#F1D9D2] bg-white p-6 text-center">
+
+              <div className="mb-2 text-3xl">
+                🔎
+              </div>
+
+              <p className="text-sm text-[#98777A]">
+                ไม่พบรีวิวที่มีแท็ก "{selectedTag}"
+              </p>
+
+              <button
+                type="button"
+                onClick={handleClearFilter}
+                className="mt-3 text-xs font-semibold text-[#B77D80] hover:underline"
+              >
+                กลับไปดูรีวิวทั้งหมด
+              </button>
+
+            </div>
+          )}
+
+        {/* FILTERED REVIEWS */}
+        {!loadingReviews &&
+          !feedError &&
+          filteredReviews.map((review) => (
             <ReviewCard
               key={review.ReviewsID}
               review={review}
+              selectedTag={selectedTag}
+              onTagClick={handleTagClick}
             />
           ))}
+
       </div>
     </div>
   );

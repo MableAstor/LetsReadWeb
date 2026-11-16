@@ -300,6 +300,44 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
         return matchesMain && matchesSub;
       }).length;
 
+
+      // จัดลำดับหนังสือสำหรับการเลือกเล่มแรก
+      const normalize = (value) =>
+        String(value ?? "").trim().toLowerCase();
+
+      const selectedMainSet = new Set(mainCategories.map(normalize));
+      const selectedSubSet = new Set(subCategories.map(normalize));
+
+      // กลุ่มที่ตรงกับหมวดหลักที่เลือก
+      const mainMatches = allBooks.filter((book) =>
+        book.categories.some((category) =>
+          selectedMainSet.has(normalize(category))
+        )
+      );
+
+      // กลุ่มที่ตรงทั้งหมวดหลักและหมวดรอง
+      const exactMatches = mainMatches.filter((book) =>
+        subCategories.length === 0 ||
+        book.subcategories.some((subcategory) =>
+          selectedSubSet.has(normalize(subcategory))
+        )
+      );
+
+      // เลือกกลุ่มที่ตรงที่สุดก่อน
+      const initialPool =
+        exactMatches.length > 0
+          ? exactMatches
+          : mainMatches.length > 0
+            ? mainMatches
+            : allBooks;
+
+      console.log("[INITIAL] Selected main:", mainCategories);
+      console.log("[INITIAL] Selected sub:", subCategories);
+      console.log("[INITIAL] Exact matches:", exactMatches.length);
+      console.log("[INITIAL] Main matches:", mainMatches.length);
+      console.log("[INITIAL] Initial pool:", initialPool.length);
+
+
       // Python v3 expects preferences/user_preferences, including [] for new users.
       // Likes/Dislikes no longer construct the user's preference profile.
       const initialResponse = await fetch(`${API_BASE}/next-book`, {
@@ -312,7 +350,7 @@ export default function CategoryCard({ onSearch, maxSelect = 5 }) {
           preferences,
           user_preferences: preferences, // Compatibility with Python v3.2 variants.
           swiped: [],
-          pool: allBooks,
+          pool: initialPool,
           selected_categories: mainCategories,
           selected_subcategories: subCategories,
         }),

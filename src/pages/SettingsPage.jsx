@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, Link} from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Bell,
   BookOpen,
-  Check,
   LockKeyhole,
   Mail,
   LogOut,
-  Moon,
-  Sun,
-  UserRound,
   ChevronRight,
-  Palette,
   ShieldCheck,
   Info,
-  ArrowLeft,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import SettingsLayout from "../components/SettingsLayout";
@@ -22,17 +15,8 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Checkbox } from "../components/ui/checkbox";
-import { Switch } from "../components/ui/switch";
 import { Separator } from "../components/ui/separator";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,51 +28,18 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 
-
-
-const API_BASE_URL = `${(import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "").replace(/\/api$/, "")}/api`;
-
-const mainCategories = [
-  "รักโรแมนติก",
-  "แฟนตาซี",
-  "กำลังภายใน",
-  "สืบสวนสอบสวน",
-  "ระทึกขวัญ/สยองขวัญ",
-  "ไซไฟ/โลกอนาคต",
-  "วาย (Yaoi / BL)",
-  "ยูริ (Yuri / GL)",
-  "พีเรียด/ย้อนยุค",
-  "วรรณกรรม/ชีวิต",
-];
-const MAX_INTERESTS = 5;
-
 const pageInfo = {
-  "/settings": ["ตั้งค่า", "จัดการบัญชีและปรับแต่งการใช้งาน"],
-  "/settings/reading": [
-    "การตั้งค่าการอ่าน",
-    "เลือกหมวดหนังสือที่สนใจ เพื่อเตรียมใช้กับระบบแนะนำ",
+  "/settings": ["ตั้งค่า", "โปรไฟล์ บัญชี และข้อมูลเวอร์ชัน"],
+  "/settings/profile": ["โปรไฟล์ผู้ใช้", "ไปยังหน้าโปรไฟล์ของฉัน"],
+  "/settings/account": [
+    "บัญชีและความปลอดภัย",
+    "จัดการอีเมล รหัสผ่าน และการออกจากระบบ",
   ],
-  "/settings/appearance": ["ธีมและการแสดงผล", "ปรับธีมและรูปแบบตัวอักษร"],
-  "/settings/notifications": [
-    "การแจ้งเตือน",
-    "เลือกรูปแบบการแจ้งเตือนที่ต้องการ",
-  ],
-  "/settings/profile": ["โปรไฟล์ผู้ใช้", "แก้ไขชื่อผู้ใช้ที่แสดงใน Let's Read"],
-  "/settings/account": ["บัญชีและความปลอดภัย", "จัดการอีเมล รหัสผ่าน และการออกจากระบบ"],
   "/settings/about": [
     "เกี่ยวกับ Let's Read",
     "ข้อมูลเกี่ยวกับแพลตฟอร์มค้นหาและแนะนำหนังสือ",
   ],
 };
-
-function readSaved(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw === null ? fallback : JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
 
 function SettingRow({ icon: Icon, label, description, children }) {
   return (
@@ -123,23 +74,6 @@ export default function SettingsPage() {
   const [messageError, setMessageError] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
-  const [interests, setInterests] = useState(() => {
-    const saved = readSaved("letsread-interests", []);
-    return Array.isArray(saved) ? saved : [];
-  });
-  const [theme, setTheme] = useState(() =>
-    readSaved("letsread-theme", "light"),
-  );
-  const [fontSize, setFontSize] = useState(() =>
-    readSaved("letsread-font-size", "normal"),
-  );
-  const [notifications, setNotifications] = useState(() => ({
-    reviews: true,
-    rewards: true,
-    recommendations: true,
-    ...readSaved("letsread-notifications", {}),
-  }));
-
   const showMessage = (text, isError = false) => {
     setMessage(text);
     setMessageError(isError);
@@ -156,12 +90,14 @@ export default function SettingsPage() {
       setUser(data.user ?? null);
       setPendingEmail(data.user?.new_email || "");
       if (data.user?.id) {
-        supabase.from("User")
+        supabase
+          .from("User")
           .select("User_Name, User_Avatar_URL")
           .eq("auth_user_id", data.user.id)
           .maybeSingle()
           .then(({ data: profileRow, error: profileError }) => {
-            if (profileError) console.error("[Settings] Profile:", profileError);
+            if (profileError)
+              console.error("[Settings] Profile:", profileError);
             if (mounted) setProfile(profileRow ?? null);
           });
       }
@@ -170,112 +106,11 @@ export default function SettingsPage() {
           data.user?.user_metadata?.full_name ??
           "",
       );
-      // Read saved settings from the authenticated backend, when available.
-      (async () => {
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-          if (!token) return;
-          const response = await fetch(`${API_BASE_URL}/settings/preferences`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!response.ok) return;
-          const settings = await response.json();
-          if (!mounted) return;
-          if (Array.isArray(settings.interests)) {
-            setInterests(settings.interests);
-            localStorage.setItem("letsread-interests", JSON.stringify(settings.interests));
-          }
-          if (settings.notifications && typeof settings.notifications === "object") {
-            setNotifications((previous) => ({ ...previous, ...settings.notifications }));
-            localStorage.setItem("letsread-notifications", JSON.stringify(settings.notifications));
-          }
-        } catch (error) {
-          console.error("[Settings] Load preferences:", error);
-        }
-      })();
     });
     return () => {
       mounted = false;
     };
   }, []);
-
-  // Persist only local UI preferences; dark classes work only on screens that support them.
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("letsread-theme", JSON.stringify(theme));
-  }, [theme]);
-  useEffect(() => {
-    localStorage.setItem("letsread-font-size", JSON.stringify(fontSize));
-  }, [fontSize]);
-
-  const toggleInterest = (category) => {
-    if (interests.includes(category)) {
-      setInterests((prev) => prev.filter((x) => x !== category));
-      setMessage("");
-      return;
-    }
-    if (interests.length >= MAX_INTERESTS) {
-      showMessage(`เลือกหมวดหลักได้สูงสุด ${MAX_INTERESTS} หมวด`, true);
-      return;
-    }
-    setInterests((prev) => [...prev, category]);
-    setMessage("");
-  };
-
-  const saveSetting = async (path, payload, storageKey, storageValue, successMessage) => {
-    setSaving(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) throw new Error("กรุณาเข้าสู่ระบบก่อนบันทึกการตั้งค่า");
-      const response = await fetch(`${API_BASE_URL}/settings/${path}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || `บันทึกไม่สำเร็จ (${response.status})`);
-      localStorage.setItem(storageKey, JSON.stringify(storageValue));
-      showMessage(successMessage);
-    } catch (error) {
-      showMessage(error.message || "บันทึกไม่สำเร็จ", true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveReading = () => {
-    if (interests.length === 0) return showMessage("กรุณาเลือกอย่างน้อย 1 หมวด", true);
-    return saveSetting("reading", { interests }, "letsread-interests", interests, "บันทึกหมวดหนังสือเรียบร้อยแล้ว");
-  };
-
-  const saveNotifications = () =>
-    saveSetting("notifications", { notifications }, "letsread-notifications", notifications,
-      "บันทึกการตั้งค่าการแจ้งเตือนเรียบร้อยแล้ว");
-
-  const saveProfile = async (event) => {
-    event.preventDefault();
-    if (!user) return showMessage("กรุณาเข้าสู่ระบบก่อน", true);
-    const clean = username.trim();
-    if (!clean) return showMessage("กรุณากรอกชื่อผู้ใช้", true);
-    setSaving(true);
-    try {
-      const { data, error } = await supabase.auth.updateUser({
-        data: { username: clean },
-      });
-      if (error) throw error;
-      setUser(data.user);
-      showMessage("บันทึกชื่อผู้ใช้ในบัญชีแล้ว");
-    } catch (error) {
-      showMessage(error.message || "บันทึกไม่สำเร็จ", true);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // Supabase Auth handles email-change confirmation; do not treat the request as completed.
   const changeEmail = async (event) => {
@@ -295,7 +130,9 @@ export default function SettingsPage() {
       setUser(data?.user || user);
       setPendingEmail(data?.user?.new_email || email);
       setNewEmail("");
-      showMessage("ส่งคำขอเปลี่ยนอีเมลแล้ว กรุณาตรวจสอบกล่องจดหมายและยืนยันตามลิงก์ (อาจต้องยืนยันทั้งอีเมลเก่าและใหม่)");
+      showMessage(
+        "ส่งคำขอเปลี่ยนอีเมลแล้ว กรุณาตรวจสอบกล่องจดหมายและยืนยันตามลิงก์ (อาจต้องยืนยันทั้งอีเมลเก่าและใหม่)",
+      );
     } catch (error) {
       showMessage(error.message || "ไม่สามารถส่งคำขอเปลี่ยนอีเมลได้", true);
     } finally {
@@ -308,9 +145,14 @@ export default function SettingsPage() {
     if (!email) return showMessage("ยังไม่มีคำขอเปลี่ยนอีเมลที่รอยืนยัน", true);
     setEmailSaving(true);
     try {
-      const { error } = await supabase.auth.resend({ type: "email_change", email });
+      const { error } = await supabase.auth.resend({
+        type: "email_change",
+        email,
+      });
       if (error) throw error;
-      showMessage("ส่งอีเมลยืนยันอีกครั้งแล้ว กรุณาตรวจสอบกล่องจดหมายและโฟลเดอร์สแปม");
+      showMessage(
+        "ส่งอีเมลยืนยันอีกครั้งแล้ว กรุณาตรวจสอบกล่องจดหมายและโฟลเดอร์สแปม",
+      );
     } catch (error) {
       showMessage(error.message || "ส่งอีเมลยืนยันอีกครั้งไม่สำเร็จ", true);
     } finally {
@@ -379,29 +221,51 @@ export default function SettingsPage() {
           >
             <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[#F3D5C9] text-2xl font-bold text-[#865B4D] shadow-sm sm:h-20 sm:w-20">
               {profile?.User_Avatar_URL ? (
-                <img src={profile.User_Avatar_URL} alt="รูปโปรไฟล์" className="h-full w-full object-cover" />
+                <img
+                  src={profile.User_Avatar_URL}
+                  alt="รูปโปรไฟล์"
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                (profile?.User_Name || username || user?.email || "U").charAt(0).toUpperCase()
+                (profile?.User_Name || username || user?.email || "U")
+                  .charAt(0)
+                  .toUpperCase()
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-[#A36D70]">โปรไฟล์ของฉัน</p>
+              <p className="text-xs font-medium text-[#A36D70]">
+                โปรไฟล์ของฉัน
+              </p>
               <h2 className="mt-1 truncate text-lg font-bold text-[#352923] sm:text-xl">
                 {profile?.User_Name || username || "นักอ่าน"}
               </h2>
               <p className="mt-1 truncate text-xs text-gray-500 sm:text-sm">
                 {user?.email || "เข้าสู่ระบบเพื่อดูโปรไฟล์"}
               </p>
-              <p className="mt-2 text-xs font-medium text-[#A36D70]">แตะเพื่อจัดการรูปโปรไฟล์ กรอบรูป และรางวัล</p>
+              <p className="mt-2 text-xs font-medium text-[#A36D70]">
+                แตะเพื่อจัดการรูปโปรไฟล์ กรอบรูป และรางวัล
+              </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-[#A36D70] transition group-hover:translate-x-1" />
           </button>
           <div>
-            <h2 className="mb-3 text-base font-bold text-[#352923]">การตั้งค่าของฉัน</h2>
+            <h2 className="mb-3 text-base font-bold text-[#352923]">
+              การตั้งค่าของฉัน
+            </h2>
             <div className="overflow-hidden rounded-2xl border border-[#F0E1DA] bg-white">
               {[
-                { path: "/settings/account", title: "บัญชีและความปลอดภัย", description: "รหัสผ่านและออกจากระบบ", Icon: ShieldCheck },
-                { path: "/settings/about", title: "เกี่ยวกับ Let's Read", description: "ข้อมูลแอปพลิเคชัน", Icon: Info },
+                {
+                  path: "/settings/account",
+                  title: "บัญชีและความปลอดภัย",
+                  description: "รหัสผ่านและออกจากระบบ",
+                  Icon: ShieldCheck,
+                },
+                {
+                  path: "/settings/about",
+                  title: "เกี่ยวกับ Let's Read",
+                  description: "ข้อมูลแอปพลิเคชัน",
+                  Icon: Info,
+                },
               ].map(({ path, title, description, Icon }) => (
                 <button
                   key={path}
@@ -409,8 +273,17 @@ export default function SettingsPage() {
                   onClick={() => navigate(path)}
                   className="flex w-full items-center gap-3 border-b border-[#F5EAE5] p-4 text-left transition last:border-0 hover:bg-[#FFF8F5]"
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FBEAE4] text-[#A36D70]"><Icon className="h-5 w-5" /></span>
-                  <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-[#352923]">{title}</span><span className="mt-1 block text-xs text-gray-500">{description}</span></span>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FBEAE4] text-[#A36D70]">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-[#352923]">
+                      {title}
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-500">
+                      {description}
+                    </span>
+                  </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
                 </button>
               ))}
@@ -419,20 +292,22 @@ export default function SettingsPage() {
         </div>
       )}
 
-      
-
-
       {pathname === "/settings/profile" && (
         <div className="rounded-2xl border border-[#F0E1DA] bg-[#FFF8F5] p-5">
           <h2 className="font-semibold text-[#352923]">โปรไฟล์ผู้ใช้</h2>
-          <p className="mt-2 text-sm text-gray-600">จัดการรูปโปรไฟล์ กรอบรูป และรางวัลได้ที่หน้าโปรไฟล์หลัก</p>
-          <Button onClick={() => navigate("/profile")} className="mt-4 rounded-xl bg-[#A36D70] text-white hover:bg-[#8F5C60]">ไปที่โปรไฟล์ของฉัน <ChevronRight className="ml-1 h-4 w-4" /></Button>
+          <p className="mt-2 text-sm text-gray-600">
+            จัดการรูปโปรไฟล์ กรอบรูป และรางวัลได้ที่หน้าโปรไฟล์หลัก
+          </p>
+          <Button
+            onClick={() => navigate("/profile")}
+            className="mt-4 rounded-xl bg-[#A36D70] text-white hover:bg-[#8F5C60]"
+          >
+            ไปที่โปรไฟล์ของฉัน <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
         </div>
       )}
 
-        
       {pathname === "/settings/account" && (
-        
         <div className="space-y-7">
           <section className="space-y-4">
             <div className="flex items-center gap-2">
@@ -441,34 +316,55 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label>อีเมลปัจจุบัน</Label>
-              <Input value={user?.email || ""} readOnly className="h-11 rounded-xl bg-[#FFF8F5]" />
+              <Input
+                value={user?.email || ""}
+                readOnly
+                className="h-11 rounded-xl bg-[#FFF8F5]"
+              />
               <p className="text-xs text-muted-foreground">
-                {user?.email_confirmed_at ? "อีเมลปัจจุบันยืนยันแล้ว" : "อีเมลปัจจุบันยังไม่แสดงสถานะยืนยัน"}
+                {user?.email_confirmed_at
+                  ? "อีเมลปัจจุบันยืนยันแล้ว"
+                  : "อีเมลปัจจุบันยังไม่แสดงสถานะยืนยัน"}
               </p>
             </div>
             <form onSubmit={changeEmail} className="space-y-3">
               <div className="space-y-2">
                 <Label htmlFor="account-new-email">อีเมลใหม่</Label>
-                <Input id="account-new-email" type="email" autoComplete="email"
-                  value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="กรอกอีเมลใหม่" required className="h-11 rounded-xl" />
+                <Input
+                  id="account-new-email"
+                  type="email"
+                  autoComplete="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="กรอกอีเมลใหม่"
+                  required
+                  className="h-11 rounded-xl"
+                />
               </div>
-              <Button type="submit" disabled={!user || emailSaving}
-                className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto">
+              <Button
+                type="submit"
+                disabled={!user || emailSaving}
+                className="w-full rounded-xl bg-[#B66D57] text-white hover:bg-[#9D5945] sm:w-auto"
+              >
                 {emailSaving ? "กำลังดำเนินการ..." : "ส่งคำขอเปลี่ยนอีเมล"}
               </Button>
             </form>
             {(pendingEmail || user?.new_email) && (
               <div className="space-y-3 rounded-xl border border-[#F0E1DA] bg-[#FFF8F5] p-4">
                 <p className="break-all text-sm text-[#463431]">
-                  อีเมลใหม่ที่รอยืนยัน: <strong>{pendingEmail || user?.new_email}</strong>
+                  อีเมลใหม่ที่รอยืนยัน:{" "}
+                  <strong>{pendingEmail || user?.new_email}</strong>
                 </p>
                 <p className="text-xs text-muted-foreground">
                   กรุณากดลิงก์ยืนยันจากอีเมลก่อนใช้อีเมลใหม่เข้าสู่ระบบ
                 </p>
-                <Button type="button" variant="outline" disabled={emailSaving || !user}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={emailSaving || !user}
                   onClick={resendEmailConfirmation}
-                  className="rounded-xl border-[#B66D57] text-[#A35E49]">
+                  className="rounded-xl border-[#B66D57] text-[#A35E49]"
+                >
                   ส่งอีเมลยืนยันอีกครั้ง
                 </Button>
               </div>
@@ -476,7 +372,6 @@ export default function SettingsPage() {
           </section>
           <Separator />
           <form onSubmit={changePassword} className="space-y-4">
-            
             <div className="flex items-center gap-2">
               <LockKeyhole className="size-4 text-[#A36D70]" />
               <h2 className="font-semibold">เปลี่ยนรหัสผ่าน</h2>

@@ -49,7 +49,7 @@ export default function UserAvatar({
           onError={() => setImageError(true)}
           style={{
             width: "100%",
-            height: "100%",
+height: "100%",
             objectFit: "cover",
             borderRadius: "50%",
             display: "block",
@@ -85,7 +85,7 @@ export default function UserAvatar({
           style={{
             position: "absolute",
             width: `${frameScale * 100}%`,
-            height: `${frameScale * 100}%`,
+height: `${frameScale * 100}%`,
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",

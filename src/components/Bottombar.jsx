@@ -4,7 +4,7 @@ import { Compass, Settings, Heart, Layers3, LibraryBig, Trophy } from "lucide-re
 const menus = [
   { label: "Home", icon: Compass, path: "/home" },
   { label: "Feed", icon: Heart, path: "/feed" },
-  { label: "Leaderboard", icon: Trophy, path: "/leaderboard" },
+  { label: "Board", icon: Trophy, path: "/leaderboard" },
   { label: "Swipe", icon: Layers3, path: "/swipe" },
   { label: "Library", icon: LibraryBig, path: "/library" },
   { label: "Settings", icon: Settings, path: "/settings" },

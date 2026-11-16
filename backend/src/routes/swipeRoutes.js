@@ -1,3 +1,4 @@
+
 import express from "express";
 import { supabaseAdmin } from "../config/supabase.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
@@ -85,11 +86,10 @@ async function hydratePreferences(rows) {
   return rows.flatMap((row) => {
     const hasMain = row.CategoriseID != null;
     const hasSub = row.SubcategoriseID != null;
-    if (hasMain === hasSub) return []; // invalid/ambiguous row
+    if (hasMain === hasSub) return [];
     const type = hasMain ? "main" : "sub";
     const id = hasMain ? row.CategoriseID : row.SubcategoriseID;
     const label = (hasMain ? mains : subs).get(String(id));
-    // Never silently use an ID in place of a missing category name.
     if (!label) {
       throw new Error(`User_Preferences references missing ${type} category ID ${id}`);
     }
@@ -129,151 +129,336 @@ function preferenceScore({ likes, dislikes }) {
   return Number(((likes - weightedDislike) / (likes + weightedDislike + SMOOTHING)).toFixed(4));
 }
 
+// จำกัดการเขียน Supabase พร้อมกันสูงสุด 5 รายการ
+const PREFERENCE_WRITE_CONCURRENCY = 5;
+
 async function savePreferences(userId, desired, existing) {
-  const keyOf = (row) => row.CategoriseID != null ? `main:${row.CategoriseID}` : `sub:${row.SubcategoriseID}`;
-  const previous = new Map(existing.filter((r) => (r.CategoriseID == null) !== (r.SubcategoriseID == null))
-    .map((r) => [keyOf(r), r]));
-  // Preserve User_PreferencesID and SessionsID; do not delete historical rows.
+  const keyOf = (row) => row.CategoriseID != null
+    ? `main:${row.CategoriseID}`
+    : `sub:${row.SubcategoriseID}`;
+
+  const previous = new Map(
+    existing
+      .filter((row) => (row.CategoriseID == null) !== (row.SubcategoriseID == null))
+      .map((row) => [keyOf(row), row]),
+  );
+
+  const writes = [];
+
   for (const row of desired) {
     const old = previous.get(keyOf(row));
+
     if (old) {
-      const { data, error } = await supabaseAdmin.from("User_Preferences")
-        .update({ Preference_Value: row.Preference_Value })
-        .eq("User_PreferencesID", old.User_PreferencesID)
-        .eq("UserID", userId)
-        .select("User_PreferencesID");
-      assertNoError(error);
-      if (!data?.length) throw new Error("Preference update did not affect a row");
-    } else {
-      const { error } = await supabaseAdmin.from("User_Preferences").insert({
-        UserID: userId,
-        CategoriseID: row.CategoriseID,
-        SubcategoriseID: row.SubcategoriseID,
-        Preference_Value: row.Preference_Value,
-        SessionsID: null,
+      // คะแนนไม่เปลี่ยน ไม่ต้องส่ง Update ไป Supabase
+      if (Number(old.Preference_Value) === Number(row.Preference_Value)) continue;
+
+      writes.push(async () => {
+        const { data, error } = await supabaseAdmin.from("User_Preferences")
+          .update({ Preference_Value: row.Preference_Value })
+          .eq("User_PreferencesID", old.User_PreferencesID)
+          .eq("UserID", userId)
+          .select("User_PreferencesID");
+
+        assertNoError(error);
+        if (!data?.length) {
+          throw new Error("Preference update did not affect a row");
+        }
       });
-      assertNoError(error);
+    } else {
+      writes.push(async () => {
+        const { error } = await supabaseAdmin.from("User_Preferences").insert({
+          UserID: userId,
+          CategoriseID: row.CategoriseID,
+          SubcategoriseID: row.SubcategoriseID,
+          Preference_Value: row.Preference_Value,
+          SessionsID: null,
+        });
+        assertNoError(error);
+      });
     }
   }
+
+  // ทำงานเป็นชุด ไม่ต้องรอทีละรายการ
+  for (let i = 0; i < writes.length; i += PREFERENCE_WRITE_CONCURRENCY) {
+    await Promise.all(
+      writes.slice(i, i + PREFERENCE_WRITE_CONCURRENCY).map((write) => write())
+    );
+  }
+
+  return writes.length;
 }
 
 async function rebuildUserPreferences(userId) {
+  const startedAt = performance.now();
   const existing = await existingPreferences(userId);
-  const history = (await fetchAllSwipes(userId)).filter((row) =>
-    row.BooksID != null && ["like", "dislike"].includes(String(row.Swipe_Action).trim().toLowerCase()))
-    .map((row) => ({ ...row, Swipe_Action: String(row.Swipe_Action).trim().toLowerCase() }));
+
+  const history = (await fetchAllSwipes(userId))
+    .filter((row) =>
+      row.BooksID != null &&
+      ["like", "dislike"].includes(String(row.Swipe_Action).trim().toLowerCase())
+    )
+    .map((row) => ({
+      ...row,
+      Swipe_Action: String(row.Swipe_Action).trim().toLowerCase(),
+    }));
+
   if (!history.length) {
-    return { preferences: await hydratePreferences(existing), swipeCount: 0,
-      updatedCount: 0, skipped: true };
+    return {
+      preferences: await hydratePreferences(existing),
+      swipeCount: 0,
+      updatedCount: 0,
+      skipped: true,
+    };
   }
+
   const bookIDs = [...new Set(history.map((row) => row.BooksID))];
+
   const [mainMap, subMap] = await Promise.all([
     fetchMappings("Book_Categorise", "CategoriseID", bookIDs),
     fetchMappings("Book_Subcategorise", "SubcategoriseID", bookIDs),
   ]);
+
   const mainScores = tally(history, mainMap, "CategoriseID");
   const subScores = tally(history, subMap, "SubcategoriseID");
+
   if (!mainScores.size && !subScores.size) {
-    throw new Error("Swipe books have no category mappings; check Book_Categorise and Book_Subcategorise");
+    throw new Error(
+      "Swipe books have no category mappings; check Book_Categorise and Book_Subcategorise"
+    );
   }
+
   const [mainNames, subNames] = await Promise.all([
     fetchNameMap("Categorise", "CategoriseID", "Categorise_Name", [...mainScores.keys()]),
     fetchNameMap("Subcategorise", "SubcategoriseID", "Subcategorise_Name", [...subScores.keys()]),
   ]);
+
   const desired = [
-    ...[...mainScores].map(([id, counts]) => ({ type: "main", label: mainNames.get(id) ?? id,
-      CategoriseID: Number(id), SubcategoriseID: null, Preference_Value: preferenceScore(counts) })),
-    ...[...subScores].map(([id, counts]) => ({ type: "sub", label: subNames.get(id) ?? id,
-      CategoriseID: null, SubcategoriseID: Number(id), Preference_Value: preferenceScore(counts) })),
+    ...[...mainScores].map(([id, counts]) => ({
+      type: "main",
+      label: mainNames.get(id) ?? id,
+      CategoriseID: Number(id),
+      SubcategoriseID: null,
+      Preference_Value: preferenceScore(counts),
+    })),
+    ...[...subScores].map(([id, counts]) => ({
+      type: "sub",
+      label: subNames.get(id) ?? id,
+      CategoriseID: null,
+      SubcategoriseID: Number(id),
+      Preference_Value: preferenceScore(counts),
+    })),
   ];
-  await savePreferences(userId, desired, existing);
-  // Return the same post-persistence profile that Python will actually use.
+
+  const writeCount = await savePreferences(userId, desired, existing);
+
   const persisted = await existingPreferences(userId);
-  return { preferences: await hydratePreferences(persisted), swipeCount: history.length,
-    updatedCount: desired.length, skipped: false };
+  const preferences = await hydratePreferences(persisted);
+
+  console.info(
+    `[PREFERENCES] rebuild ${Math.round(performance.now() - startedAt)}ms; ` +
+    `swipes=${history.length}, categories=${desired.length}, writes=${writeCount}`
+  );
+
+  return {
+    preferences,
+    swipeCount: history.length,
+    updatedCount: desired.length,
+    skipped: false,
+  };
 }
 
 async function findRequest(userId, requestId) {
   const { data, error } = await supabaseAdmin.from("Swipe_History")
-    .select(SWIPE_FIELDS).eq("UserID", userId).eq("Request_ID", requestId).maybeSingle();
+    .select(SWIPE_FIELDS)
+    .eq("UserID", userId)
+    .eq("Request_ID", requestId)
+    .maybeSingle();
+
   assertNoError(error);
   return data;
 }
 
-const validPositiveInt = (value) => value != null && value !== "" &&
-  Number.isSafeInteger(Number(value)) && Number(value) > 0;
-const validUUID = (value) => typeof value === "string" &&
+const validPositiveInt = (value) =>
+  value != null &&
+  value !== "" &&
+  Number.isSafeInteger(Number(value)) &&
+  Number(value) > 0;
+
+const validUUID = (value) =>
+  typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 router.post("/rebuild-preferences", requireAuth, async (req, res) => {
   try {
     const result = await rebuildUserPreferences(req.userProfile.UserID);
-    return res.json({ success: true, preferencesUpdated: !result.skipped,
+
+    return res.json({
+      success: true,
+      preferencesUpdated: !result.skipped,
       preferences: result.preferences,
-      preferenceSummary: { swipeCount: result.swipeCount, updatedCount: result.updatedCount } });
+      preferenceSummary: {
+        swipeCount: result.swipeCount,
+        updatedCount: result.updatedCount,
+      },
+    });
   } catch (error) {
     console.error("[PREFERENCES] rebuild:", error);
-    return res.status(500).json({ success: false, message: "ไม่สามารถคำนวณ User_Preferences ได้" });
+    return res.status(500).json({
+      success: false,
+      message: "ไม่สามารถคำนวณ User_Preferences ได้",
+    });
   }
 });
 
 router.post("/", requireAuth, async (req, res) => {
+  const requestStart = performance.now();
+  console.log("[SWIPE] Request received");
+
+  res.on("finish", () => {
+    console.log(
+      "[SWIPE] Total request:",
+      (performance.now() - requestStart).toFixed(2),
+      "ms",
+      "Status:",
+      res.statusCode
+    );
+  });
+
   try {
     const userId = req.userProfile.UserID;
-    const action = typeof req.body?.action === "string" ? req.body.action.trim().toLowerCase() : "";
+    const action =
+      typeof req.body?.action === "string"
+        ? req.body.action.trim().toLowerCase()
+        : "";
+
     const { bookId, sessionId, requestId } = req.body ?? {};
-    if (!["like", "dislike"].includes(action) || !validUUID(requestId) ||
-        !validPositiveInt(bookId) || !validPositiveInt(sessionId)) {
-      return res.status(400).json({ success: false,
-        message: "ต้องส่ง action (like/dislike), requestId (UUID), bookId และ sessionId ที่ถูกต้อง" });
+
+    if (
+      !["like", "dislike"].includes(action) ||
+      !validUUID(requestId) ||
+      !validPositiveInt(bookId) ||
+      !validPositiveInt(sessionId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "ต้องส่ง action (like/dislike), requestId (UUID), bookId และ sessionId ที่ถูกต้อง",
+      });
     }
+
     let swipe = await findRequest(userId, requestId);
     let duplicate = !!swipe;
-    if (swipe && (Number(swipe.BooksID) !== Number(bookId) ||
-                  Number(swipe.SessionsID) !== Number(sessionId) ||
-                  String(swipe.Swipe_Action).trim().toLowerCase() !== action)) {
-      return res.status(409).json({ success: false, message: "Request_ID นี้ถูกใช้กับ Swipe รายการอื่นแล้ว" });
+
+    if (
+      swipe &&
+      (
+        Number(swipe.BooksID) !== Number(bookId) ||
+        Number(swipe.SessionsID) !== Number(sessionId) ||
+        String(swipe.Swipe_Action).trim().toLowerCase() !== action
+      )
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: "Request_ID นี้ถูกใช้กับ Swipe รายการอื่นแล้ว",
+      });
     }
+
     if (!swipe) {
-      const { data: session, error: sessionError } = await supabaseAdmin.from("Sessions")
-        .select("SessionsID, Ended_At").eq("SessionsID", Number(sessionId))
-        .eq("UserID", userId).maybeSingle();
+      const { data: session, error: sessionError } = await supabaseAdmin
+        .from("Sessions")
+        .select("SessionsID, Ended_At")
+        .eq("SessionsID", Number(sessionId))
+        .eq("UserID", userId)
+        .maybeSingle();
+
       assertNoError(sessionError);
-      if (!session) return res.status(404).json({ success: false, message: "ไม่พบ Session ของผู้ใช้นี้" });
-      if (session.Ended_At != null) return res.status(409).json({ success: false, message: "Session นี้ปิดแล้ว" });
-      const { data, error } = await supabaseAdmin.from("Swipe_History").insert({
-        UserID: userId, SessionsID: Number(sessionId), BooksID: Number(bookId),
-        Swipe_Action: action, Request_ID: requestId,
-      }).select(SWIPE_FIELDS).single();
-      if (error?.code === "23505") { // concurrent retry with the same Request_ID
+
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: "ไม่พบ Session ของผู้ใช้นี้",
+        });
+      }
+
+      if (session.Ended_At != null) {
+        return res.status(409).json({
+          success: false,
+          message: "Session นี้ปิดแล้ว",
+        });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("Swipe_History")
+        .insert({
+          UserID: userId,
+          SessionsID: Number(sessionId),
+          BooksID: Number(bookId),
+          Swipe_Action: action,
+          Request_ID: requestId,
+        })
+        .select(SWIPE_FIELDS)
+        .single();
+
+      if (error?.code === "23505") {
+        // ป้องกันบันทึกซ้ำ เมื่อมีการ Retry ด้วย Request_ID เดิม
         swipe = await findRequest(userId, requestId);
+
         if (!swipe) throw error;
-        if (Number(swipe.BooksID) !== Number(bookId) || Number(swipe.SessionsID) !== Number(sessionId) ||
-            String(swipe.Swipe_Action).trim().toLowerCase() !== action) {
-          return res.status(409).json({ success: false, message: "Request_ID นี้ถูกใช้กับ Swipe รายการอื่นแล้ว" });
+
+        if (
+          Number(swipe.BooksID) !== Number(bookId) ||
+          Number(swipe.SessionsID) !== Number(sessionId) ||
+          String(swipe.Swipe_Action).trim().toLowerCase() !== action
+        ) {
+          return res.status(409).json({
+            success: false,
+            message: "Request_ID นี้ถูกใช้กับ Swipe รายการอื่นแล้ว",
+          });
         }
+
         duplicate = true;
       } else {
         assertNoError(error);
         swipe = data;
       }
     }
+
     try {
       const result = await rebuildUserPreferences(userId);
-      return res.status(200).json({ success: true, swipeSaved: true, duplicate,
-        swipe, preferencesUpdated: !result.skipped, preferences: result.preferences,
-        preferenceSummary: { swipeCount: result.swipeCount, updatedCount: result.updatedCount } });
+
+      return res.status(200).json({
+        success: true,
+        swipeSaved: true,
+        duplicate,
+        swipe,
+        preferencesUpdated: !result.skipped,
+        preferences: result.preferences,
+        preferenceSummary: {
+          swipeCount: result.swipeCount,
+          updatedCount: result.updatedCount,
+        },
+      });
     } catch (error) {
       console.error("[PREFERENCES] after swipe:", error);
-      // 200 because Swipe_History was saved. Client must retry with SAME requestId.
-      return res.status(200).json({ success: true, swipeSaved: true, duplicate,
-        swipe, preferencesUpdated: false, preferences: [],
-        preferenceError: "คำนวณ Preference ไม่สำเร็จ กรุณาลองใหม่ด้วยรายการเดิม" });
+
+      // Swipe ถูกบันทึกแล้ว ต้อง Retry ด้วย Request_ID เดิม
+      return res.status(200).json({
+        success: true,
+        swipeSaved: true,
+        duplicate,
+        swipe,
+        preferencesUpdated: false,
+        preferences: [],
+        preferenceError: "คำนวณ Preference ไม่สำเร็จ กรุณาลองใหม่ด้วยรายการเดิม",
+      });
     }
   } catch (error) {
     console.error("[SWIPE] save:", error);
-    return res.status(500).json({ success: false, swipeSaved: false,
-      message: "บันทึก Swipe ไม่สำเร็จ กรุณาลองใหม่" });
+
+    return res.status(500).json({
+      success: false,
+      swipeSaved: false,
+      message: "บันทึก Swipe ไม่สำเร็จ กรุณาลองใหม่",
+    });
   }
 });
 

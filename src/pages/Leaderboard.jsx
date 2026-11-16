@@ -1,8 +1,11 @@
+
 import { useEffect, useState } from "react";
 
-import { ArrowUp, Crown, Trophy } from "lucide-react";
+import { ArrowUp, Trophy } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
+
+import MonthlyRewardCarousel from "../components/MonthlyRewardCarousel";
 
 import {
   Card,
@@ -11,19 +14,13 @@ import {
   CardTitle,
 } from "../components/ui/card";
 
-import { Badge } from "../components/ui/badge";
-
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "") + "/api/auth";
 
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
-// ======================================================
 // ตรวจสอบเดือนปัจจุบันตามเวลาไทย
-// ใช้ตรวจจับเมื่อเปลี่ยนเดือนเพื่อโหลด Leaderboard ใหม่
-// ======================================================
-
 function getBangkokMonthKey() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok",
@@ -43,15 +40,22 @@ function getBangkokMonthKey() {
 }
 
 export default function LeaderboardPage() {
-  // ข้อมูล Leaderboard จาก Backend
+  // ข้อมูล Leaderboard
   const [leaderboardData, setLeaderboardData] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Countdown ถึงสิ้นเดือน
+  // Countdown
   const [countdown, setCountdown] = useState("");
+
+  // เดือนที่ใช้แสดงกรอบรางวัล
+  const [monthKey, setMonthKey] = useState(
+    getBangkokMonthKey()
+  );
+
+  const rewardMonth = Number(monthKey.split("-")[1]);
 
   const rankList = leaderboardData?.rankings || [];
   const currentUser = leaderboardData?.currentUser || null;
@@ -60,11 +64,7 @@ export default function LeaderboardPage() {
   const reviewsNeeded =
     Number(leaderboardData?.reviewsNeeded) || 0;
 
-  // ======================================================
-  // โหลด Leaderboard จาก Backend
-  // GET /api/auth/leaderboard
-  // ======================================================
-
+  // โหลดข้อมูล Leaderboard
   useEffect(() => {
     let cancelled = false;
 
@@ -74,7 +74,6 @@ export default function LeaderboardPage() {
       setLeaderboardData(null);
 
       try {
-        // ตรวจสอบ Session ของผู้ใช้
         const {
           data: { session },
           error: sessionError,
@@ -90,7 +89,6 @@ export default function LeaderboardPage() {
           );
         }
 
-        // เรียก API Leaderboard รายเดือน
         const response = await fetch(
           `${API_URL}/leaderboard`,
           {
@@ -100,11 +98,14 @@ export default function LeaderboardPage() {
           }
         );
 
-        const result = await response.json().catch(() => ({}));
+        const result = await response
+          .json()
+          .catch(() => ({}));
 
         if (!response.ok || result.success === false) {
           throw new Error(
-            result.message || "โหลดตารางอันดับไม่สำเร็จ"
+            result.message ||
+              "โหลดตารางอันดับไม่สำเร็จ"
           );
         }
 
@@ -112,7 +113,10 @@ export default function LeaderboardPage() {
           setLeaderboardData(result);
         }
       } catch (error) {
-        console.error("[Leaderboard] Load error:", error);
+        console.error(
+          "[Leaderboard] Load error:",
+          error
+        );
 
         if (!cancelled) {
           setLeaderboardData(null);
@@ -137,11 +141,7 @@ export default function LeaderboardPage() {
     };
   }, [reloadKey]);
 
-  // ======================================================
-  // ตรวจจับการเปลี่ยนเดือน
-  // หากขึ้นเดือนใหม่ ให้โหลด Leaderboard ใหม่อัตโนมัติ
-  // ======================================================
-
+  // ตรวจจับเมื่อเปลี่ยนเดือน
   useEffect(() => {
     let lastMonthKey = getBangkokMonthKey();
 
@@ -151,10 +151,14 @@ export default function LeaderboardPage() {
       if (nextMonthKey !== lastMonthKey) {
         lastMonthKey = nextMonthKey;
 
+        // เปลี่ยนกรอบให้ตรงเดือน
+        setMonthKey(nextMonthKey);
+
+        // โหลดอันดับใหม่
         setReloadKey((key) => key + 1);
 
         console.log(
-          "[Leaderboard] New month detected. Reloading rankings..."
+          "[Leaderboard] New month detected."
         );
       }
     }, 30_000);
@@ -164,10 +168,7 @@ export default function LeaderboardPage() {
     };
   }, []);
 
-  // ======================================================
-  // Countdown ถึงสิ้นเดือนตามเวลาไทย
-  // ======================================================
-
+  // Countdown ถึงสิ้นเดือน
   useEffect(() => {
     function formatRemainingTime(endDate) {
       const remaining = Math.max(
@@ -200,20 +201,26 @@ export default function LeaderboardPage() {
       }).formatToParts(new Date());
 
       const year = Number(
-        parts.find((part) => part.type === "year")?.value
+        parts.find(
+          (part) => part.type === "year"
+        )?.value
       );
 
       const month = Number(
-        parts.find((part) => part.type === "month")?.value
+        parts.find(
+          (part) => part.type === "month"
+        )?.value
       );
 
-      // เวลาเริ่มต้นวันที่ 1 ของเดือนถัดไป เวลาไทย
+      // วันที่ 1 ของเดือนถัดไป เวลาไทย
       const nextMonthTime =
         Date.UTC(year, month, 1) - BANGKOK_OFFSET_MS;
 
       const endOfMonth = new Date(nextMonthTime);
 
-      setCountdown(formatRemainingTime(endOfMonth));
+      setCountdown(
+        formatRemainingTime(endOfMonth)
+      );
     }
 
     updateCountdown();
@@ -228,29 +235,6 @@ export default function LeaderboardPage() {
     };
   }, []);
 
-  // ======================================================
-  // ของรางวัล TOP 1–3
-  // คงการออกแบบเดิมไว้
-  // ======================================================
-
-  const rewardBadges = [
-    {
-      rank: 1,
-      medal: "🥇",
-      color: "bg-[#ffdf9e]",
-    },
-    {
-      rank: 2,
-      medal: "🥈",
-      color: "bg-[#fbe7b3]",
-    },
-    {
-      rank: 3,
-      medal: "🥉",
-      color: "bg-[#faecc7]",
-    },
-  ];
-
   return (
     <main
       className="
@@ -264,40 +248,48 @@ export default function LeaderboardPage() {
         lg:pb-28
       "
     >
-      {/* สถานะการโหลดและข้อผิดพลาด */}
+
+      {/* สถานะการโหลด */}
       {loading && (
         <p className="py-3 text-center text-sm text-muted-foreground">
           กำลังโหลดตารางอันดับ...
         </p>
       )}
 
+      {/* ข้อผิดพลาด */}
       {!loading && errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center">
+
           <p className="text-sm text-red-600">
             {errorMessage}
           </p>
 
           <button
             type="button"
-            onClick={() => setReloadKey((key) => key + 1)}
+            onClick={() =>
+              setReloadKey((key) => key + 1)
+            }
             className="mt-2 text-sm font-semibold underline"
           >
             ลองอีกครั้ง
           </button>
+
         </div>
       )}
 
-      {/* ======================================================
-          1. Monthly Countdown
-         ====================================================== */}
+      {/* ==============================
+          1. MONTHLY COUNTDOWN
+         ============================== */}
 
       <div className="w-full shrink-0">
         <div
           className="
             flex min-h-[68px] w-full
             flex-col items-center justify-center
-            gap-1 rounded-xl border border-purple-300
-            bg-white px-3 py-3 text-center shadow-sm
+            gap-1 rounded-xl
+            border border-purple-300
+            bg-white px-3 py-3
+            text-center shadow-sm
           "
         >
           <span className="text-sm font-bold text-gray-900">
@@ -310,9 +302,9 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* ======================================================
-          2. Top 1–3 Rewards
-         ====================================================== */}
+      {/* ==============================
+          2. TOP 1–3 REWARDS
+         ============================== */}
 
       <Card
         className="
@@ -339,81 +331,18 @@ export default function LeaderboardPage() {
         </CardHeader>
 
         <CardContent className="px-4 sm:px-6">
-          <div
-            className="
-              grid grid-cols-1
-              items-center gap-5
-              sm:grid-cols-2 sm:gap-6
-            "
-          >
-            {/* Limited Frame */}
-            <div className="flex min-w-0 flex-col items-center text-center">
-              <div
-                className="
-                  flex h-24 w-24
-                  items-center justify-center
-                  rounded-full border-4
-                  border-indigo-300
-                  bg-muted/40 shadow-md
-                  sm:h-28 sm:w-28
-                "
-              >
-                <Crown className="h-12 w-12 text-amber-500" />
-              </div>
 
-              <p className="mt-3 text-xs font-bold leading-relaxed">
-                เฟรมลิมิเต็ดประจำเดือน
+          {/* สไลด์กรอบรางวัลอัตโนมัติ */}
+          <MonthlyRewardCarousel
+            month={rewardMonth}
+          />
 
-                <span className="block">
-                  เฉพาะเดือนนี้เท่านั้น!!
-                </span>
-              </p>
-
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                สำหรับนักรีวิวยอดเยี่ยม
-              </p>
-            </div>
-
-            {/* Reward Badges */}
-            <div className="flex min-w-0 flex-col gap-2.5">
-              <p className="mb-1 text-center text-[11px] leading-relaxed text-muted-foreground sm:text-left">
-                พร้อมกับแท็กหลังชื่อสุดเก๋
-                ติดท้ายอวดความเจ๋ง
-              </p>
-
-              {rewardBadges.map((item) => (
-                <Badge
-                  key={item.rank}
-                  variant="secondary"
-                  className={`
-                    flex min-h-10 w-full
-                    items-center justify-start
-                    gap-2 rounded-full
-                    border-0 px-3 py-2
-                    text-left text-[11px]
-                    font-bold text-gray-900
-                    whitespace-normal shadow-xs
-                    sm:text-xs
-                    ${item.color}
-                  `}
-                >
-                  <span className="shrink-0 text-base">
-                    {item.medal}
-                  </span>
-
-                  <span className="min-w-0 leading-snug">
-                    นักรีวิว TOP {item.rank} ประจำเดือน
-                  </span>
-                </Badge>
-              ))}
-            </div>
-          </div>
         </CardContent>
       </Card>
 
-      {/* ======================================================
-          3. Leaderboard Rankings
-         ====================================================== */}
+      {/* ==============================
+          3. LEADERBOARD RANKINGS
+         ============================== */}
 
       <Card
         className="
@@ -437,6 +366,7 @@ export default function LeaderboardPage() {
         </CardHeader>
 
         <CardContent className="space-y-2 px-3 sm:px-5">
+
           {loading ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
               กำลังโหลดอันดับ...
@@ -462,7 +392,10 @@ export default function LeaderboardPage() {
                   }
                 `}
               >
+
+                {/* อันดับและชื่อผู้ใช้ */}
                 <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+
                   <span
                     className="
                       flex w-7 shrink-0
@@ -494,8 +427,10 @@ export default function LeaderboardPage() {
                     {user.name}
                     {user.isCurrentUser ? " (คุณ)" : ""}
                   </span>
+
                 </div>
 
+                {/* จำนวนรีวิว */}
                 <span
                   className="
                     shrink-0 text-right
@@ -505,17 +440,17 @@ export default function LeaderboardPage() {
                 >
                   {user.reviews} รีวิว
                 </span>
+
               </div>
             ))
           )}
+
         </CardContent>
       </Card>
 
-      {/* ======================================================
-          4. Floating Current User Ranking
-          Mobile: above Bottom Navigation
-          Desktop: bottom of viewport
-         ====================================================== */}
+      {/* ==============================
+          4. CURRENT USER RANKING
+         ============================== */}
 
       {!loading && !errorMessage && currentUser && (
         <Card
@@ -544,8 +479,10 @@ export default function LeaderboardPage() {
               sm:gap-4 sm:px-4
             "
           >
-            {/* User Rank */}
+
+            {/* อันดับของผู้ใช้ */}
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+
               <div
                 className="
                   shrink-0 rounded-xl
@@ -565,10 +502,12 @@ export default function LeaderboardPage() {
               <span className="min-w-0 truncate text-xs font-bold sm:text-sm">
                 {currentUser.name}
               </span>
+
             </div>
 
-            {/* Reviews Needed */}
+            {/* จำนวนรีวิวที่ต้องการ */}
             <div className="shrink-0 text-right">
+
               <p className="text-[11px] font-bold sm:text-xs">
                 {currentUser.rank === 1
                   ? "คุณอยู่อันดับ 1 แล้ว"
@@ -588,15 +527,19 @@ export default function LeaderboardPage() {
                     <ArrowUp className="h-3 w-3" />
 
                     <span>
-                      เพื่อขึ้นอันดับ {previousRank?.rank ?? 1}
+                      เพื่อขึ้นอันดับ{" "}
+                      {previousRank?.rank ?? 1}
                     </span>
                   </>
                 )}
               </div>
+
             </div>
+
           </CardContent>
         </Card>
       )}
+
     </main>
   );
 }

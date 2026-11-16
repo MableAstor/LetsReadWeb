@@ -20,7 +20,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import LeaderboardPage from "./pages/Leaderboard";
 import SettingsPage from "./pages/SettingsPage";
 import ViralBooksPage from "./pages/ViralBooksPage";
-import Top100Page from "./pages/Top100Page";
+import EditProfilePage from "./pages/EditProfilePage";
 
 export default function App() {
   const location = useLocation();
@@ -79,7 +79,6 @@ export default function App() {
 
             {/* หน้าหนังสือ */}
             <Route path="/viral-books" element={<ViralBooksPage />} />
-            <Route path="/top-100" element={<Top100Page />} />
 
             {/* หน้า Settings เปิดดูได้ แต่การบันทึกค่าต้อง Login */}
             <Route path="/settings" element={<SettingsPage />} />
@@ -89,6 +88,7 @@ export default function App() {
             <Route path="/settings/account" element={<SettingsPage />} />
             <Route path="/settings/about" element={<SettingsPage />} />
             <Route path="/settings/profile" element={<SettingsPage />} />
+            <Route path="/settings/profile/edit" element={<EditProfilePage />} />
 
             {/* Authentication */}
             <Route path="/Login" element={<LoginPage />} />
