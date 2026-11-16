@@ -652,7 +652,7 @@ export default function useEditProfile() {
         }
       }
 
-      navigate("/settings/profile", {
+      navigate("/profile", {
         replace: true,
       });
     } catch (error) {
