@@ -1,4 +1,3 @@
-
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 
 import { Headbar } from "./components/Headbar";
@@ -9,6 +8,7 @@ import FeedPage from "./pages/FeedPage";
 import SwipePage from "./pages/SwipePage";
 import LibraryPage from "./pages/LibraryPage";
 import ProfilePage from "./pages/ProfilePage";
+import PublicProfilePage from "./components/PublicProfilePage";
 import Swipeforbooks from "./pages/Swipeforbooks";
 import ResultPage from "./pages/ResultPage";
 
@@ -65,7 +65,10 @@ export default function App() {
         <div className="mx-auto w-full min-w-0 max-w-6xl">
           <Routes>
             {/* เปิดเว็บมาเข้าหน้า Home เลย */}
-            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route
+              path="/"
+              element={<Navigate to="/home" replace />}
+            />
 
             {/* หน้าหลัก: เข้าดูได้โดยไม่ต้อง Login */}
             <Route path="/home" element={<HomePage />} />
@@ -74,11 +77,26 @@ export default function App() {
             <Route path="/swipe" element={<SwipePage />} />
             <Route path="/swipeforbooks" element={<Swipeforbooks />} />
             <Route path="/library" element={<LibraryPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+
+            {/* โปรไฟล์ส่วนตัวของผู้ใช้งาน */}
+            <Route
+              path="/profile"
+              element={<ProfilePage />}
+            />
+
+            {/* โปรไฟล์สาธารณะของสมาชิกคนอื่น */}
+            <Route
+              path="/profile/:userId"
+              element={<PublicProfilePage />}
+            />
+
             <Route path="/Result" element={<ResultPage />} />
 
             {/* หน้าหนังสือ */}
-            <Route path="/viral-books" element={<ViralBooksPage />} />
+            <Route
+              path="/viral-books"
+              element={<ViralBooksPage />}
+            />
 
             {/* หน้า Settings เปิดดูได้ แต่การบันทึกค่าต้อง Login */}
             <Route path="/settings" element={<SettingsPage />} />
@@ -88,7 +106,10 @@ export default function App() {
             <Route path="/settings/account" element={<SettingsPage />} />
             <Route path="/settings/about" element={<SettingsPage />} />
             <Route path="/settings/profile" element={<SettingsPage />} />
-            <Route path="/settings/profile/edit" element={<EditProfilePage />} />
+            <Route
+              path="/settings/profile/edit"
+              element={<EditProfilePage />}
+            />
 
             {/* Authentication */}
             <Route path="/Login" element={<LoginPage />} />
@@ -97,7 +118,10 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* URL ที่ไม่มีอยู่ */}
-            <Route path="*" element={<Navigate to="/home" replace />} />
+            <Route
+              path="*"
+              element={<Navigate to="/home" replace />}
+            />
           </Routes>
         </div>
       </main>

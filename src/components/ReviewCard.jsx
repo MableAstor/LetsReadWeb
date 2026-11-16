@@ -1,102 +1,111 @@
 import { useEffect, useState } from "react";
-
-import { Heart, Share2, Bookmark, Star, Crown, Medal, Award } from "lucide-react";
+import {
+  Heart,
+  Share2,
+  Bookmark,
+  Star,
+  MessageCircle,
+  ChevronDown,
+  ChevronUp,
+  Crown,
+  Medal,
+  Award,
+} from "lucide-react";
 
 import { supabase } from "../lib/supabase";
 
-import { Card, CardContent, CardFooter, CardHeader } from "./ui/card";
-
-import { Badge } from "./ui/badge";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "./ui/card";
 
 import { Button } from "./ui/button";
-
+import { useNavigate } from "react-router-dom";
 import profileicon from "../assets/profile-icon.png";
-
 import UserAvatar from "./UserAvatar";
 import ReviewComments from "./ReviewComments";
 
 import firstLogin from "../assets/pink-cloud-circle-frame-2026.png";
-
 import reviewFive from "../assets/red-fire-abstract-frame.png";
-
 import toponeNOV from "../assets/blue-and-orange-fish-frame.png";
-
 import toptwoNOV from "../assets/cute-bunnies-hug-frame.png";
-
 import topthreeNOV from "../assets/running-dogs-and-paws-frame.png";
-
 import toponeDEC from "../assets/red-cat-yarn-frame.png.png";
-
 import toptwoDEC from "../assets/green-leaves-and-blue-clouds-frame.png";
-
 import topthreeDEC from "../assets/golden-thorn-vines-frame.png";
 
 const API_URL =
-  (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(
-    /\/+$/,
-    "",
-  ) + "/api/auth";
+  (import.meta.env.VITE_API_URL || "http://localhost:5000")
+    .replace(/\/+$/, "") + "/api/auth";
 
-// ======================================================
-
-// รูปกรอบโปรไฟล์
-
-// ใช้ ID เดียวกับ ProfilePage
-
-// ======================================================
-
+// กรอบโปรไฟล์ตาม ID
 const FRAME_IMAGES = {
   1: firstLogin,
-
   2: reviewFive,
-
   3: toponeNOV,
-
   4: toptwoNOV,
-
   5: topthreeNOV,
-
   6: toponeDEC,
-
   7: toptwoDEC,
-
   8: topthreeDEC,
 };
 
-export default function ReviewCard({ review }) {
-  // สถานะหัวใจและจำนวนหัวใจ
+export default function ReviewCard({
+  review,
+  selectedTag,
+  onTagClick,
+}) {
+  //กดดูโปรไฟล์ผู้อื่น
+    const navigate = useNavigate();
+  // Like
+  const [likeCount, setLikeCount] = useState(
+    Number(review?.Like_Count) || 0
+  );
 
-  const [likeCount, setLikeCount] = useState(Number(review?.Like_Count) || 0);
-
-  const [liked, setLiked] = useState(Boolean(review?.Liked_By_Me));
+  const [liked, setLiked] = useState(
+    Boolean(review?.Liked_By_Me)
+  );
 
   const [liking, setLiking] = useState(false);
 
-  // สถานะการบันทึกรีวิว
-
-  const [saved, setSaved] = useState(Boolean(review?.Saved_By_Me));
+  // Save
+  const [saved, setSaved] = useState(
+    Boolean(review?.Saved_By_Me)
+  );
 
   const [saving, setSaving] = useState(false);
 
-  // สถานะเมนูแชร์
-
+  // Share
   const [shareOpen, setShareOpen] = useState(false);
 
-  // อัปเดตสถานะเมื่อได้รับข้อมูลรีวิวใหม่จาก Feed
+  // Expand review text
+  const [textExpanded, setTextExpanded] = useState(false);
 
+  // Comments
+  const [commentsOpen, setCommentsOpen] = useState(false);
+
+  // Image
+  const [imageError, setImageError] = useState(false);
+
+  // รีเซ็ตส่วนที่เปิดอยู่เมื่อเปลี่ยนโพสต์
+  useEffect(() => {
+    setTextExpanded(false);
+    setCommentsOpen(false);
+    setShareOpen(false);
+    setImageError(false);
+  }, [review?.ReviewsID]);
+
+  // ซิงก์ข้อมูล Like / Save
   useEffect(() => {
     setLikeCount(Number(review?.Like_Count) || 0);
-
     setLiked(Boolean(review?.Liked_By_Me));
-
     setSaved(Boolean(review?.Saved_By_Me));
   }, [
     review?.ReviewsID,
-
     review?.Like_Count,
-
     review?.Liked_By_Me,
-
     review?.Saved_By_Me,
   ]);
 
@@ -104,57 +113,73 @@ export default function ReviewCard({ review }) {
 
   const rating = Math.min(
     5,
-
-    Math.max(0, Number(review.Rating) || 0),
+    Math.max(0, Number(review.Rating) || 0)
   );
+
+  // แท็กฉายาที่ผู้รีวิวเลือกใช้งานจริง (ส่งมาจาก Feed API)
+  const activeTitle = review.Active_Title ?? review.User?.Active_Title ?? null;
+  const titleColors = {
+    gold: "border-amber-300 bg-amber-50 text-amber-800",
+    silver: "border-slate-300 bg-slate-50 text-slate-600",
+    bronze: "border-orange-300 bg-orange-50 text-orange-800",
+  };
+  const TitleIcon = activeTitle?.color === "gold"
+    ? Crown
+    : activeTitle?.color === "silver"
+      ? Medal
+      : Award;
 
   const userName = review.User_Name || "Reader";
-
   const bookTitle = review.Book_Title || "Untitled book";
 
-  // ======================================================
-
-  // รูปโปรไฟล์และกรอบของเจ้าของรีวิว
-
-  // ======================================================
-
-  // ใช้รูปที่ผู้ใช้อัปโหลด หากไม่มีใช้รูปเริ่มต้น
-
+  // รูปโปรไฟล์
   const avatarUrl =
-    review.User_Avatar_URL || review.User?.User_Avatar_URL || profileicon;
+    review.User_Avatar_URL ||
+    review.User?.User_Avatar_URL ||
+    profileicon;
 
-  // ดึง ID กรอบที่ผู้ใช้เลือกจากฐานข้อมูล
-
+  // กรอบโปรไฟล์
   const activeFrameId = Number(
-    review.Active_Frame_RewardsID ?? review.User?.Active_Frame_RewardsID,
+    review.Active_Frame_RewardsID ??
+      review.User?.Active_Frame_RewardsID
   );
 
-  // ค้นหารูปกรอบจาก ID
+  const activeFrameImage =
+    FRAME_IMAGES[activeFrameId] || null;
 
-  const activeFrameImage = FRAME_IMAGES[activeFrameId] || null;
-
-  // ======================================================
-
-  // ข้อมูลรีวิว
-
-  // ======================================================
-
-  // เลือกรูปที่จะแสดง: รูปที่ผู้ใช้อัปโหลดก่อน
-
-  // หากไม่มี ให้ใช้รูปปกหนังสือจากฐานข้อมูล
-
-  const reviewImage = review.Image_URL || review.Books_Cover;
+  // รูปรีวิว หรือรูปปกหนังสือ
+  const reviewImage =
+    review.Image_URL || review.Books_Cover;
 
   const reviewDate = review.Created_At
     ? new Date(review.Created_At).toLocaleDateString("th-TH")
     : null;
 
-  // ======================================================
+  // รายการแท็ก
+ 
+const tags = [
+  review.Main_Category,
+  review.Sub_Category,
+]
+  .filter(Boolean)
+  .flatMap((category) =>
+    String(category)
+      .split(/[,，、]/)
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  )
+  .filter(
+    (tag, index, array) =>
+      array.findIndex(
+        (item) => item.toLowerCase() === tag.toLowerCase()
+      ) === index
+  );
 
-  // LIKE / UNLIKE REVIEW
 
-  // ======================================================
+  const normalizeTag = (value) =>
+    String(value ?? "").trim().toLowerCase();
 
+  // LIKE / UNLIKE
   const handleLike = async () => {
     if (liking || !review.ReviewsID) return;
 
@@ -163,56 +188,47 @@ export default function ReviewCard({ review }) {
     try {
       const {
         data: { session },
-
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw sessionError;
-      }
+      if (sessionError) throw sessionError;
 
       if (!session?.access_token) {
         alert("กรุณาเข้าสู่ระบบก่อนกดใจ");
-
         return;
       }
 
       const response = await fetch(
         `${API_URL}/reviews/${review.ReviewsID}/like`,
-
         {
           method: "POST",
-
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
-        },
+        }
       );
 
-      const result = await response.json().catch(() => ({}));
+      const result = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok || result.success === false) {
-        throw new Error(result.message || "กดใจไม่สำเร็จ กรุณาลองใหม่");
+        throw new Error(
+          result.message || "กดใจไม่สำเร็จ กรุณาลองใหม่"
+        );
       }
 
       setLiked(Boolean(result.liked));
-
       setLikeCount(Number(result.likeCount) || 0);
     } catch (error) {
       console.error("[ReviewCard] Like error:", error);
-
-      alert(error.message || "ไม่สามารถกดใจรีวิวได้ กรุณาลองใหม่");
+      alert(error.message || "ไม่สามารถกดใจรีวิวได้");
     } finally {
       setLiking(false);
     }
   };
 
-  // ======================================================
-
-  // SAVE / UNSAVE REVIEW
-
-  // ======================================================
-
+  // SAVE / UNSAVE
   const handleSave = async () => {
     if (saving || !review.ReviewsID) return;
 
@@ -221,336 +237,354 @@ export default function ReviewCard({ review }) {
     try {
       const {
         data: { session },
-
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw sessionError;
-      }
+      if (sessionError) throw sessionError;
 
       if (!session?.access_token) {
         alert("กรุณาเข้าสู่ระบบก่อนบันทึกรีวิว");
-
         return;
       }
 
       const response = await fetch(
         `${API_URL}/reviews/${review.ReviewsID}/save`,
-
         {
           method: "POST",
-
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
-        },
+        }
       );
 
-      const result = await response.json().catch(() => ({}));
+      const result = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok || result.success === false) {
-        throw new Error(result.message || "บันทึกรีวิวไม่สำเร็จ");
+        throw new Error(
+          result.message || "บันทึกรีวิวไม่สำเร็จ"
+        );
       }
-
-      // อัปเดตสถานะ Save / Unsave
 
       setSaved(Boolean(result.saved));
 
-      // ======================================================
-
-      // ตรวจสอบรางวัลเฉพาะเมื่อบันทึกรีวิวสำเร็จ
-
-      // ======================================================
-
+      // ตรวจสอบรางวัลเมื่อบันทึกสำเร็จ
       if (result.saved) {
         try {
           const rewardResponse = await fetch(
             `${API_URL}/rewards/check`,
-
             {
               method: "POST",
-
               headers: {
                 Authorization: `Bearer ${session.access_token}`,
               },
-            },
+            }
           );
 
           const rewardResult = await rewardResponse
-
             .json()
-
             .catch(() => ({}));
 
-          if (!rewardResponse.ok || rewardResult.success === false) {
+          if (
+            !rewardResponse.ok ||
+            rewardResult.success === false
+          ) {
             console.error(
               "[REWARDS] ตรวจสอบรางวัลไม่สำเร็จ:",
-
-              rewardResult.message,
+              rewardResult.message
             );
-          } else if (rewardResult.newlyUnlocked?.length > 0) {
+          } else if (
+            rewardResult.newlyUnlocked?.length > 0
+          ) {
             console.log(
               "[REWARDS] ปลดล็อกรางวัลใหม่:",
-
-              rewardResult.newlyUnlocked,
+              rewardResult.newlyUnlocked
             );
           }
         } catch (rewardError) {
-          // ระบบรางวัลผิดพลาดต้องไม่กระทบการบันทึกรีวิว
-
           console.error(
             "[REWARDS] Error:",
-
-            rewardError,
+            rewardError
           );
         }
       }
     } catch (error) {
       console.error("[ReviewCard] Save error:", error);
-
       alert(error.message || "ไม่สามารถบันทึกรีวิวได้");
     } finally {
       setSaving(false);
     }
   };
 
-  // ======================================================
-
   // เตรียมข้อมูลสำหรับแชร์
-
-  // ======================================================
-
   const getShareData = () => {
     const shareUrl = new URL(window.location.href);
-
-    // ระบุตำแหน่งรีวิวที่ต้องการแชร์
 
     shareUrl.hash = `review-${review.ReviewsID}`;
 
     const shareText = [
       `รีวิวหนังสือ: ${bookTitle}`,
-
       `ผู้รีวิว: ${userName}`,
-
       `คะแนน: ${rating}/5`,
-
       review.Review_Text || "",
     ]
-
       .filter(Boolean)
-
       .join("\n");
 
     return {
       url: shareUrl.toString(),
-
       text: shareText,
     };
   };
 
-  // ======================================================
-
-  // SHARE REVIEW TO SOCIAL MEDIA
-
-  // ======================================================
-
+  // แชร์ไป Social Media
   const handleShare = (platform) => {
     const { url, text } = getShareData();
 
     const encodedUrl = encodeURIComponent(url);
-
     const encodedText = encodeURIComponent(text);
 
     const shareLinks = {
       x: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
-
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-
       line: `https://social-plugins.line.me/lineit/share?url=${encodedUrl}`,
-
-      whatsapp: `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(
+        `${text}\n${url}`
+      )}`,
     };
 
     const targetUrl = shareLinks[platform];
 
     if (!targetUrl) return;
 
-    // เปิดหน้าสำหรับแชร์ของ Social Media ที่เลือก
-
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
+    window.open(
+      targetUrl,
+      "_blank",
+      "noopener,noreferrer"
+    );
 
     setShareOpen(false);
   };
 
-  // ======================================================
-
-  // COPY REVIEW LINK
-
-  // ======================================================
-
+  // คัดลอกลิงก์
   const handleCopyLink = async () => {
     const { url } = getShareData();
 
     try {
       if (!navigator.clipboard?.writeText) {
         window.prompt("คัดลอกลิงก์รีวิวนี้", url);
-
         setShareOpen(false);
-
         return;
       }
 
       await navigator.clipboard.writeText(url);
-
       alert("คัดลอกลิงก์รีวิวแล้ว");
-
       setShareOpen(false);
     } catch (error) {
-      console.error("[ReviewCard] Copy link error:", error);
+      console.error(
+        "[ReviewCard] Copy link error:",
+        error
+      );
 
       window.prompt("คัดลอกลิงก์รีวิวนี้", url);
     }
+    
   };
 
   return (
     <Card
       id={`review-${review.ReviewsID}`}
-      className="mx-auto w-full max-w-2xl gap-0 overflow-hidden rounded-xl border-border bg-card py-0 shadow-sm"
+      className="mx-auto w-full max-w-xl gap-0 overflow-hidden rounded-2xl border border-[#F1D9D2] bg-white py-0 shadow-sm"
     >
-      {/* Reviewer profile */}
 
-      <CardHeader className="flex flex-row items-center gap-3 px-3 py-3 sm:px-4">
-        {/* รูปโปรไฟล์พร้อมกรอบของเจ้าของรีวิว */}
+      {/* PROFILE */}
+<CardHeader className="flex flex-row items-center gap-3 px-4 py-3">
+  <button
+    type="button"
+    onClick={() => {
+      if (review.UserID) {
+        navigate(`/profile/${review.UserID}`);
+      }
+    }}
+    disabled={!review.UserID}
+    aria-label={`ดูโปรไฟล์ของ ${userName}`}
+    className="shrink-0 rounded-full transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#A76F71]"
+  >
+    <UserAvatar
+      avatarUrl={avatarUrl}
+      userName={userName}
+      frameImage={activeFrameImage}
+      size={40}
+      frameScale={1.3}
+    />
+  </button>
 
-        <UserAvatar
-          avatarUrl={avatarUrl}
-          userName={userName}
-          frameImage={activeFrameImage}
-          size={40}
-          frameScale={1.3}
-        />
+  <div className="min-w-0 flex-1">
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="min-w-0 break-words text-sm font-semibold text-[#684B50] sm:text-base">
+        {userName}
+      </p>
+      {activeTitle?.name && (
+        <span className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${titleColors[activeTitle.color] || titleColors.bronze}`}>
+          <TitleIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">{activeTitle.name}</span>
+        </span>
+      )}
+    </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 break-words text-sm font-semibold text-[#684B50] sm:text-base">
-              {userName}
-            </p>
-            {review.Active_Title && (() => {
-              const title = review.Active_Title;
-              const styles = {
-                gold: "border-amber-300 bg-amber-50 text-amber-800",
-                silver: "border-slate-300 bg-slate-50 text-slate-600",
-                bronze: "border-orange-300 bg-orange-50 text-orange-800",
-              };
-              const Icon = title.color === "gold" ? Crown : title.color === "silver" ? Medal : Award;
-              return (
-                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${styles[title.color] || styles.bronze}`}>
-                  <Icon className="h-3 w-3" aria-hidden="true" />
-                  {title.name}
-                </span>
-              );
-            })()}
+    {reviewDate && (
+      <time className="text-xs text-[#B18A8D]">
+        {reviewDate}
+      </time>
+    )}
+  </div>
+</CardHeader>
+
+      {/* REVIEW CONTENT */}
+      <CardContent className="px-4 pb-3">
+        <div className="space-y-2.5">
+
+          {/* BOOK TITLE */}
+          <h3 className="break-words text-base font-bold text-[#684B50]">
+            {bookTitle}
+          </h3>
+
+          {/* RATING */}
+          <div
+            className="flex items-center gap-0.5"
+            aria-label={`คะแนน ${rating} จาก 5 ดาว`}
+            role="img"
+          >
+            {[1, 2, 3, 4, 5].map((star) => (
+              <Star
+                key={star}
+                className={`h-4 w-4 ${
+                  star <= rating
+                    ? "fill-[#F2C66D] text-[#F2C66D]"
+                    : "text-[#E8DAD5]"
+                }`}
+              />
+            ))}
           </div>
 
-          {reviewDate && (
-            <time className="text-xs text-[#B18A8D]">{reviewDate}</time>
-          )}
-        </div>
-      </CardHeader>
+          {/* CLICKABLE TAGS */}
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
 
-      {/* Review content */}
+              {tags.map((tag, index) => {
+                const isActive =
+                  normalizeTag(selectedTag) ===
+                  normalizeTag(tag);
 
-      <CardContent className="px-4 pb-4 sm:px-5">
-        <div className="space-y-3 rounded-xl border border-[#F1D9D2] bg-[#FFFAF8] p-3 sm:p-4">
-          {/* Book title and rating */}
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="min-w-0 flex-1 break-words text-base font-bold text-[#684B50]">
-              {bookTitle}
-            </h3>
-
-            <div
-              className="flex shrink-0 items-center gap-0.5"
-              aria-label={`คะแนน ${rating} จาก 5 ดาว`}
-              role="img"
-            >
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={`h-4 w-4 ${
-                    star <= rating
-                      ? "fill-[#F2C66D] text-[#F2C66D]"
-                      : "text-[#E8DAD5]"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Categories */}
-
-          {(review.Main_Category || review.Sub_Category) && (
-            <div className="flex flex-wrap gap-2">
-              {review.Main_Category && (
-                <Badge
-                  variant="outline"
-                  className="max-w-full rounded-full px-3 py-1 font-normal"
-                >
-                  <span className="break-words">{review.Main_Category}</span>
-                </Badge>
-              )}
-
-              {review.Sub_Category && (
-                <Badge
-                  variant="outline"
-                  className="max-w-full rounded-full px-3 py-1 font-normal"
-                >
-                  <span className="break-words">{review.Sub_Category}</span>
-                </Badge>
-              )}
-            </div>
-          )}
-
-          {/* Review text */}
-
-          {review.Review_Text && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#80676A]">
-              {review.Review_Text}
-            </p>
-          )}
-
-          {/* Review image: uploaded image first, book cover as fallback */}
-
-          {reviewImage && (
-            <img
-              src={reviewImage}
-              alt={`รูปประกอบรีวิว ${bookTitle}`}
-              loading="lazy"
-              className="mt-3 max-h-[400px] w-full rounded-xl bg-[#F8F0ED] object-contain"
-              onError={(event) => {
-                console.error(
-                  "[ReviewCard] โหลดรูปไม่สำเร็จ:",
-
-                  reviewImage,
+                return (
+                  <button
+                    key={`${tag}-${index}`}
+                    type="button"
+                    onClick={() => onTagClick?.(tag)}
+                    aria-pressed={isActive}
+                    className={`
+                      max-w-full rounded-full border
+                      px-2.5 py-1 text-left text-[11px]
+                      font-medium transition-all duration-200
+                      hover:border-[#D99BA0]
+                      hover:bg-[#FFF1EE]
+                      focus-visible:outline
+                      focus-visible:outline-2
+                      focus-visible:outline-offset-2
+                      focus-visible:outline-[#B77D80]
+                      ${
+                        isActive
+                          ? "border-[#D99BA0] bg-[#F9DFE0] text-[#A85F69]"
+                          : "border-[#E8D5D0] bg-white text-[#80676A]"
+                      }
+                    `}
+                  >
+                    <span className="break-words">
+                      {tag}
+                    </span>
+                  </button>
                 );
+              })}
 
-                event.currentTarget.style.display = "none";
-              }}
-            />
+            </div>
           )}
+
+          {/* REVIEW TEXT */}
+          {review.Review_Text && (
+            <div>
+              <p
+                className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#80676A]"
+                style={
+                  textExpanded
+                    ? undefined
+                    : {
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }
+                }
+              >
+                {review.Review_Text}
+              </p>
+
+              {review.Review_Text.length > 160 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTextExpanded((value) => !value)
+                  }
+                  aria-expanded={textExpanded}
+                  className="mt-1 text-xs font-semibold text-[#B77D80] hover:underline"
+                >
+                  {textExpanded
+                    ? "แสดงน้อยลง"
+                    : "อ่านเพิ่มเติม"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* REVIEW IMAGE WITH BLURRED BACKGROUND */}
+          {reviewImage && !imageError && (
+            <div className="relative mt-2 h-[210px] w-full overflow-hidden rounded-xl bg-[#F8F0ED] sm:h-[240px]">
+
+              {/* พื้นหลังเบลอ */}
+              <img
+                src={reviewImage}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+              />
+
+              {/* Overlay */}
+              <div className="absolute inset-0 bg-white/15" />
+
+              {/* รูปจริง */}
+              <img
+                src={reviewImage}
+                alt={`รูปประกอบรีวิว ${bookTitle}`}
+                loading="lazy"
+                className="relative z-10 h-full w-full object-contain"
+                onError={() => setImageError(true)}
+              />
+
+            </div>
+          )}
+
         </div>
       </CardContent>
 
-      {/* Actions */}
+      {/* ACTION BUTTONS */}
+      <CardFooter className="flex flex-wrap items-center justify-between gap-1 border-t border-[#F1D9D2] px-3 py-1.5">
 
-      <CardFooter className="flex items-center justify-around gap-1 border-t px-2 py-2 sm:justify-start sm:gap-4 sm:px-4">
-        {/* Like */}
-
+        {/* LIKE */}
         <Button
           type="button"
           variant="ghost"
-          size="lg"
+          size="sm"
           onClick={handleLike}
           disabled={liking}
           aria-pressed={liked}
@@ -562,34 +596,42 @@ export default function ReviewCard({ review }) {
           }`}
         >
           <Heart
-            className={`h-4 w-4 ${liked ? "fill-current text-pink-500" : ""}`}
+            className={`h-4 w-4 ${
+              liked
+                ? "fill-current text-pink-500"
+                : ""
+            }`}
           />
 
-          <span>{liking ? "..." : `Like ${likeCount}`}</span>
+          <span className="text-xs">
+            {liking ? "..." : `Like ${likeCount}`}
+          </span>
         </Button>
 
-        {/* Share */}
-
+        {/* SHARE */}
         <Button
           type="button"
           variant="ghost"
-          size="lg"
-          onClick={() => setShareOpen((open) => !open)}
+          size="sm"
+          onClick={() =>
+            setShareOpen((open) => !open)
+          }
           aria-label="Share review"
           aria-expanded={shareOpen}
           className="min-w-0 gap-1.5 px-2 text-muted-foreground hover:text-pink-500"
         >
           <Share2 className="h-4 w-4" />
 
-          <span>Share</span>
+          <span className="text-xs">
+            Share
+          </span>
         </Button>
 
-        {/* Save */}
-
+        {/* SAVE */}
         <Button
           type="button"
           variant="ghost"
-          size="lg"
+          size="sm"
           onClick={handleSave}
           disabled={saving}
           aria-pressed={saved}
@@ -600,21 +642,62 @@ export default function ReviewCard({ review }) {
               : "text-muted-foreground hover:text-pink-500"
           }`}
         >
-          <Bookmark className={`h-4 w-4 ${saved ? "fill-current" : ""}`} />
+          <Bookmark
+            className={`h-4 w-4 ${
+              saved ? "fill-current" : ""
+            }`}
+          />
 
-          <span>{saving ? "..." : saved ? "Saved" : "Save"}</span>
+          <span className="text-xs">
+            {saving
+              ? "..."
+              : saved
+                ? "Saved"
+                : "Save"}
+          </span>
         </Button>
+
+        {/* COMMENTS */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            setCommentsOpen((value) => !value)
+          }
+          aria-expanded={commentsOpen}
+          className="min-w-0 gap-1 px-2 text-[#80676A] hover:text-[#B77D80]"
+        >
+          <MessageCircle className="h-4 w-4" />
+
+          <span className="text-xs">
+            ความคิดเห็น
+          </span>
+
+          {commentsOpen ? (
+            <ChevronUp className="h-3 w-3" />
+          ) : (
+            <ChevronDown className="h-3 w-3" />
+          )}
+        </Button>
+
       </CardFooter>
 
-      <ReviewComments reviewId={review.ReviewsID} />
+      {/* COMMENTS SECTION */}
+      {commentsOpen && (
+        <ReviewComments reviewId={review.ReviewsID} />
+      )}
 
-      {/* Social sharing menu */}
-
+      {/* SHARE MENU */}
       {shareOpen && (
-        <div className="border-t border-border p-3 sm:p-4">
-          <p className="mb-3 text-sm font-semibold">แชร์รีวิวไปยัง</p>
+        <div className="border-t border-[#F1D9D2] p-3">
+
+          <p className="mb-3 text-sm font-semibold text-[#684B50]">
+            แชร์รีวิวไปยัง
+          </p>
 
           <div className="flex flex-wrap gap-2">
+
             <Button
               type="button"
               variant="outline"
@@ -659,9 +742,11 @@ export default function ReviewCard({ review }) {
             >
               Copy link
             </Button>
+
           </div>
         </div>
       )}
+
     </Card>
   );
 }

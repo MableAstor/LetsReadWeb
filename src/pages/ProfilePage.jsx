@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import UserAvatar from "../components/UserAvatar";
@@ -21,6 +20,11 @@ import {
   Medal,
   X,
   Loader2,
+  BookOpen,
+  Heart,
+  Star,
+  Bookmark,
+  CalendarDays,
 } from "lucide-react";
 
 import { supabase } from "../lib/supabase";
@@ -189,7 +193,23 @@ export default function ProfilePage() {
   const [orderMessage, setOrderMessage] = useState("");
 
   const [selectedReward, setSelectedReward] = useState(null);
+  const [myReviews, setMyReviews] = useState([]);
+  const [loadingMyReviews, setLoadingMyReviews] = useState(true);
+  const [myReviewsError, setMyReviewsError] = useState("");
 
+  function formatReviewDate(value) {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("th-TH", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
   // โหลดโปรไฟล์
   useEffect(() => {
     let active = true;
@@ -214,7 +234,7 @@ export default function ProfilePage() {
         const { data: profile, error: profileError } =
           await supabase
             .from("User")
-            .select("User_Name, User_Avatar_URL")
+            .select("UserID, User_Name, User_Avatar_URL")
             .eq("auth_user_id", authUser.id)
             .maybeSingle();
 
@@ -236,7 +256,102 @@ export default function ProfilePage() {
       active = false;
     };
   }, []);
+  // ======================================================
+  // โหลดรีวิวทั้งหมดของผู้ใช้ปัจจุบัน
+  // ======================================================
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadMyReviews() {
+      if (!user?.id) {
+        setMyReviews([]);
+        setLoadingMyReviews(false);
+        return;
+      }
+
+      // รอให้โหลดข้อมูลโปรไฟล์เสร็จก่อน
+      if (profileData === null) {
+        setLoadingMyReviews(true);
+        return;
+      }
+
+      if (!profileData.UserID) {
+        setMyReviews([]);
+        setMyReviewsError("ไม่พบข้อมูลโปรไฟล์ผู้ใช้");
+        setLoadingMyReviews(false);
+        return;
+      }
+
+      try {
+        setLoadingMyReviews(true);
+        setMyReviewsError("");
+
+        // ตรวจสอบ Session
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) throw sessionError;
+
+        if (!session?.access_token) {
+          throw new Error("กรุณาเข้าสู่ระบบใหม่");
+        }
+
+        // เรียก API ดึงรายการรีวิว
+        const response = await fetch(
+          `${API_URL}/reviews/test`,
+          {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || result.success === false) {
+          throw new Error(
+            result.message || "ไม่สามารถโหลดรีวิวได้"
+          );
+        }
+
+        // กรองให้เหลือเฉพาะรีวิวของผู้ใช้ปัจจุบัน
+        const userReviews = (
+          Array.isArray(result.reviews)
+            ? result.reviews
+            : []
+        ).filter(
+          (review) =>
+            String(review.UserID) ===
+            String(profileData.UserID)
+        );
+
+        if (active) {
+          setMyReviews(userReviews);
+        }
+      } catch (error) {
+        console.error("[Profile] Load my reviews:", error);
+
+        if (active) {
+          setMyReviewsError(
+            error.message || "ไม่สามารถโหลดรีวิวได้"
+          );
+        }
+      } finally {
+        if (active) {
+          setLoadingMyReviews(false);
+        }
+      }
+    }
+
+    loadMyReviews();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, profileData]);
   // โหลดรางวัล
   useEffect(() => {
     let active = true;
@@ -571,9 +686,9 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                
-<div
-  className="
+
+                <div
+                  className="
     flex w-full gap-3
     overflow-x-auto overflow-y-hidden
     scroll-smooth
@@ -587,20 +702,20 @@ export default function ProfilePage() {
     [&::-webkit-scrollbar-thumb]:rounded-full
     [&::-webkit-scrollbar-thumb]:bg-[#DDBDB2]
   "
->
-  {orderedRewards.map((reward, index) => (
-    <div key={reward.code} className="shrink-0 snap-start">
-      <RewardCard
-        reward={reward}
-        index={index}
-        total={orderedRewards.length}
-        editing={editingRewards}
-        onMove={moveReward}
-        onDetails={setSelectedReward}
-      />
-    </div>
-  ))}
-</div>
+                >
+                  {orderedRewards.map((reward, index) => (
+                    <div key={reward.code} className="shrink-0 snap-start">
+                      <RewardCard
+                        reward={reward}
+                        index={index}
+                        total={orderedRewards.length}
+                        editing={editingRewards}
+                        onMove={moveReward}
+                        onDetails={setSelectedReward}
+                      />
+                    </div>
+                  ))}
+                </div>
 
 
                 {editingRewards && (
@@ -649,17 +764,227 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* รีวิวของฉัน */}
-      <section className="mt-7">
-        <div className="mb-3">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-[#49332F]">
-            <Trophy size={19} className="text-[#B77C69]" />
-            รีวิวของฉัน
-          </h2>
+
+      {/* รีวิวของฉัน - My Reading Journal */}
+      <section className="mt-8">
+        {/* ส่วนหัว */}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="mb-1 text-[10px] font-bold tracking-[2px] text-[#B78A7D]">
+              MY READING JOURNAL
+            </p>
+
+            <h2 className="flex items-center gap-2 text-xl font-extrabold text-[#49332F]">
+              <BookOpen size={22} className="text-[#B77C69]" />
+              รีวิวของฉัน
+            </h2>
+
+            <p className="mt-1 text-xs text-[#A18C85]">
+              ทุกเรื่องราวและความประทับใจที่คุณเคยแบ่งปัน
+            </p>
+          </div>
+
+          {!loadingMyReviews && !myReviewsError && (
+            <div className="flex shrink-0 flex-col items-center justify-center rounded-2xl border border-[#F0DDD3] bg-[#FFF8F3] px-4 py-3">
+              <span className="text-2xl font-extrabold text-[#A76F71]">
+                {myReviews.length}
+              </span>
+              <span className="text-[9px] font-bold tracking-wider text-[#B18A83]">
+                REVIEWS
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="min-h-[180px] rounded-[24px] border border-[#F1DFD7] bg-white shadow-sm" />
+        {/* กล่องรวบรวมรีวิว */}
+        <div className="overflow-hidden rounded-[26px] border border-[#F0DDD3] bg-[#FFF8F3] p-4 shadow-[0_8px_25px_rgba(100,61,56,0.05)] sm:p-6">
+
+          {/* หัวข้อภายในกล่อง */}
+          <div className="mb-5 flex items-center justify-between border-b border-[#EEDDD4] pb-4">
+            <div>
+              <h3 className="text-sm font-bold text-[#674B45]">
+                บันทึกการอ่านของคุณ
+              </h3>
+              <p className="mt-1 text-[11px] text-[#A18C85]">
+                รวมรีวิวหนังสือทั้งหมดของคุณ
+              </p>
+            </div>
+
+            <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-semibold text-[#A76F71] shadow-sm">
+              เรียงจากล่าสุด
+            </span>
+          </div>
+
+          {/* Loading */}
+          {loadingMyReviews ? (
+            <div className="flex min-h-[180px] items-center justify-center gap-2 text-sm text-[#907772]">
+              <Loader2 size={19} className="animate-spin" />
+              กำลังโหลดรีวิวของคุณ...
+            </div>
+
+          ) : myReviewsError ? (
+            <div
+              role="alert"
+              className="flex min-h-[180px] items-center justify-center text-center text-sm text-red-500"
+            >
+              {myReviewsError}
+            </div>
+
+          ) : myReviews.length === 0 ? (
+            /* Empty State */
+            <div className="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#E8D1C6] bg-white/70 px-4 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F8E9E1]">
+                <BookOpen size={30} className="text-[#B77C69]" />
+              </div>
+
+              <h3 className="text-sm font-bold text-[#674B45]">
+                ยังไม่มีรีวิวในบันทึกของคุณ
+              </h3>
+
+              <p className="mt-2 max-w-xs text-xs leading-relaxed text-[#A18C85]">
+                ลองเลือกหนังสือที่คุณชื่นชอบ แล้วเขียนรีวิวแรกเพื่อแบ่งปันเรื่องราวให้กับนักอ่านคนอื่น ๆ
+              </p>
+            </div>
+
+          ) : (
+            /* รายการรีวิว */
+            <div className="flex flex-col gap-4">
+              {myReviews.map((review) => {
+                const rating = Math.max(
+                  0,
+                  Math.min(5, Number(review.Rating) || 0)
+                );
+
+                const reviewDate = formatReviewDate(
+                  review.Created_At
+                );
+
+                return (
+                  <article
+                    key={review.ReviewsID}
+                    className="group rounded-2xl border border-[#F0E6E0] bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-4"
+                  >
+                    <div className="flex gap-3 sm:gap-4">
+
+                      {/* รูปจากรีวิวก่อน ถ้าไม่มีใช้รูปปกหนังสือ */}
+                      <div className="h-[118px] w-[82px] shrink-0 overflow-hidden rounded-xl bg-[#F8EDE7] sm:h-[136px] sm:w-[94px]">
+                        {(review.Image_URL || review.Books_Cover) ? (
+                          <img
+                            src={review.Image_URL || review.Books_Cover}
+                            alt={review.Book_Title || "รูปหนังสือ"}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                            onError={(event) => {
+                              // ถ้ารูปจากรีวิวโหลดไม่ได้ ให้ลองใช้รูปปกจาก Books
+                              if (
+                                review.Image_URL &&
+                                review.Books_Cover &&
+                                event.currentTarget.src !== review.Books_Cover
+                              ) {
+                                event.currentTarget.src = review.Books_Cover;
+                              } else {
+                                event.currentTarget.style.display = "none";
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <BookOpen
+                              size={30}
+                              className="text-[#C6A69A]"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* รายละเอียดหนังสือ */}
+                      <div className="min-w-0 flex-1">
+
+                        {/* ชื่อหนังสือ */}
+                        <h3 className="line-clamp-2 text-sm font-extrabold leading-relaxed text-[#49332F] sm:text-base">
+                          {review.Book_Title || "ไม่ระบุชื่อหนังสือ"}
+                        </h3>
+
+                        {/* หมวดหมู่ */}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {review.Main_Category && (
+                            <span className="rounded-full bg-[#F8E9E1] px-2.5 py-1 text-[10px] font-semibold text-[#A76F71]">
+                              {review.Main_Category}
+                            </span>
+                          )}
+
+                          {review.Sub_Category && (
+                            <span className="line-clamp-1 rounded-full bg-[#F4F0EB] px-2.5 py-1 text-[10px] font-medium text-[#927A70]">
+                              {review.Sub_Category}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* คะแนน */}
+                        <div className="mt-2 flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              size={13}
+                              className={
+                                star <= rating
+                                  ? "fill-[#D9AD62] text-[#D9AD62]"
+                                  : "fill-[#F0E8E2] text-[#F0E8E2]"
+                              }
+                            />
+                          ))}
+
+                          <span className="ml-1 text-[11px] font-bold text-[#967A6F]">
+                            {rating.toFixed(1)}
+                          </span>
+                        </div>
+
+                        {/* วันที่ */}
+                        {reviewDate && (
+                          <div className="mt-2 flex items-center gap-1 text-[10px] text-[#B09A91]">
+                            <CalendarDays size={12} />
+                            {reviewDate}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ข้อความรีวิว */}
+                    {review.Review_Text && (
+                      <div className="mt-3 border-t border-[#F3EAE5] pt-3">
+                        <p className="line-clamp-3 text-xs leading-[1.9] text-[#80665E]">
+                          {review.Review_Text}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* จำนวน Like และสถานะ Save */}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#F7EFEB] pt-3">
+                      <div className="flex items-center gap-1.5 text-[11px] text-[#A18C85]">
+                        <Heart
+                          size={14}
+                          className="text-[#C98787]"
+                        />
+                        <span>
+                          {(review.Like_Count || 0).toLocaleString("th-TH")} Likes
+                        </span>
+                      </div>
+
+                      {review.Saved_By_Me && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#F8EDE7] px-2.5 py-1 text-[10px] font-semibold text-[#A76F71]">
+                          <Bookmark size={11} />
+                          บันทึกไว้แล้ว
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
+
 
       {/* Popup รายละเอียดรางวัล */}
       {selectedReward && (

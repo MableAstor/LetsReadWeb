@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Award, ChevronLeft, ChevronRight, Crown, Medal } from "lucide-react";
 
 import profileicon from "../assets/profile-icon.png";
 
@@ -21,12 +21,32 @@ const FRAMES = {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
+// ตัวอย่างแท็กฉายาตามรางวัลอันดับประจำเดือน (ไม่ใช่สถานะปลดล็อกจริง)
+const TITLE_PREVIEWS = [
+  {
+    name: "ราชานักรีวิว",
+    Icon: Crown,
+    className: "border-amber-300 bg-[#FFF0C2] text-[#926315]",
+  },
+  {
+    name: "ยอดนักรีวิว",
+    Icon: Medal,
+    className: "border-slate-300 bg-[#F0F3F7] text-[#64748B]",
+  },
+  {
+    name: "ดาวรุ่งนักรีวิว",
+    Icon: Award,
+    className: "border-orange-300 bg-[#FBE4D4] text-[#A35F37]",
+  },
+];
+
 export default function MonthlyRewardCarousel({
   month = new Date().getMonth() + 1,
 }) {
   const [index, setIndex] = useState(0);
 
   const frames = FRAMES[Number(month)] ?? [];
+  const activeTitle = TITLE_PREVIEWS[index];
 
   useEffect(() => {
     setIndex(0);
@@ -129,8 +149,12 @@ export default function MonthlyRewardCarousel({
           Reader
         </span>
 
-        <span className="rounded-full bg-[#FFE5B1] px-3 py-1 text-[11px] font-semibold text-[#735124]">
-          {MEDALS[index]} นักรีวิว TOP {index + 1}
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold ${activeTitle.className}`}
+          aria-label={`ตัวอย่างแท็กฉายา ${activeTitle.name}`}
+        >
+          <activeTitle.Icon className="h-3.5 w-3.5" aria-hidden="true" />
+          {activeTitle.name}
         </span>
       </div>
 
