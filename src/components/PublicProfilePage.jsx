@@ -39,6 +39,8 @@ import toponeDEC from "../assets/red-cat-yarn-frame.png.png";
 import toptwoDEC from "../assets/green-leaves-and-blue-clouds-frame.png";
 import topthreeDEC from "../assets/golden-thorn-vines-frame.png";
 
+import PublicProfileSkeleton from "../components/skeleton/PublicProfileSkeleton";
+
 // ======================================================
 // API URL
 // ======================================================
@@ -240,18 +242,8 @@ export default function PublicProfilePage() {
     // ======================================================
 
     if (loading) {
-        return (
-            <main className="flex min-h-[70vh] items-center justify-center">
-                <div className="flex items-center gap-2 text-sm text-[#907772]">
-                    <Loader2
-                        size={20}
-                        className="animate-spin"
-                    />
-                    กำลังโหลดโปรไฟล์นักอ่าน...
-                </div>
-            </main>
-        );
-    }
+  return <PublicProfileSkeleton />;
+}
 
     // ======================================================
     // ไม่พบโปรไฟล์
