@@ -241,7 +241,7 @@ export default function EditProfileView({ model }) {
               <button
                 type="button"
                 onClick={() =>
-                  navigate("/settings/profile")
+                  navigate("/profile")
                 }
                 disabled={saving}
                 className="rounded-xl border border-[#E8D5D0] bg-white px-5 py-3 text-sm font-semibold text-[#80676A] hover:bg-[#FFF1EE]"
